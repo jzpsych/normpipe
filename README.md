@@ -112,7 +112,9 @@ See `inst/instruments/demo7/demo7.yml` (small, all scale types) and
   specific factors of four items) is weakly identified: mirt's Oakes
   information matrix is singular at the default EM tolerance, so
   `fit_with_mirt()` refits with `TOL = 1e-5` (then, as a last resort, with
-  the cross-product information); the resulting maximum-likelihood solution
+  the cross-product information; on the demo the EM still reports
+  non-convergence after 5000 cycles at that tolerance, with the specific
+  factor of one block collapsing towards zero); the resulting maximum-likelihood solution
   differs from the penalised internal one in the conditional and integrated
   intervals of that domain (about 1 T on average, up to 14 T in sparse
   tails). The PID-5 domain models (three facets of 6 to 14 items) are not

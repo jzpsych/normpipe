@@ -659,11 +659,40 @@ versions:
 cells:
   gender: [m, f]
   age_breaks: [18, 35, 50, 65, Inf]
-  ages: [18, 100]
+  ages: [18, 85]          # as ages = 18:85 in the original pipeline
   kernel: {half_width0: 4, min_neff: 150, max_half_width: 12}
 uncertainty:
   prior_mass: 1
   n_boot: 200
   n_param_draws: 50
+# Transfer module (M2): the 17 PID5BF+ facet doublets are the bridge
+# predictors (br_mean, the mean of the 34 bridge items, enters only the sigma
+# model), the donor sample enters as a fixed effect and the general-population
+# quota sample (respondi) is the reference level of the projection, as in
+# Section 5 of the original pipeline.
+transfer:
+  enabled: true
+  reference_level: respondi
+  n_draws: 500
+  adapt_delta: 0.95
+  # backend: cmdstanr when installed (as in the original), otherwise rstan
+  bridge:
+    - {id: emo_lability, items: [62, 122]}
+    - {id: anxiousness, items: [109, 110]}
+    - {id: separation_insec, items: [50, 64]}
+    - {id: withdrawal, items: [82, 136]}
+    - {id: anhedonia, items: [23, 189]}
+    - {id: intimacy_avoid, items: [89, 108]}
+    - {id: manipulativeness, items: [162, 219]}
+    - {id: deceitfulness, items: [126, 218]}
+    - {id: grandiosity, items: [187, 197]}
+    - {id: irresponsibility, items: [129, 160]}
+    - {id: impulsivity, items: [4, 17]}
+    - {id: distractibility, items: [6, 132]}
+    - {id: unusual_beliefs, items: [194, 209]}
+    - {id: eccentricity, items: [25, 185]}
+    - {id: percept_dysreg, items: [44, 77]}
+    - {id: perseveration, items: [60, 128]}
+    - {id: rigid_perfect, items: [123, 176]}
 measurement:
   engine: auto

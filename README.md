@@ -44,10 +44,10 @@ Design decisions (agreed with J. Zimmermann, 2026-11-04):
 ## Install and run
 
 ```r
-# from the package folder
-R CMD INSTALL normpipe
+# install.packages("remotes")
+remotes::install_github("jzpsych/normpipe")
 library(normpipe)
-inst <- read_instrument("normpipe/inst/instruments/demo7/demo7.yml")
+inst <- read_instrument(system.file("instruments/demo7/demo7.yml", package = "normpipe"))
 scale_registry(inst)                      # every version_scale outcome
 sim <- simulate_reference(inst, N = 1500) # or your own list(meta, items)
 res <- run_norming(inst, ref = list(meta = sim$meta, items = sim$items),
@@ -92,10 +92,16 @@ See `inst/instruments/demo7/demo7.yml` (small, all scale types) and
   short form calibrated from the long form; 27 unit tests
   (`tests/testthat`: Lord–Wingersky vs brute force, frequency vs individual
   frames, prior mass per cell, grids, EAP monotonicity).
-- Not yet run on real data: the PID-5 configuration (checked against the
-  original keys: 25 + 5 + 1 outcomes for full and SF, 5 + 1 for BF, 17 + 5
-  for BF+, Anankastia and the 30-item total for BF+M; routes direct/transfer
-  as in the original), the transfer module (`R/transfer.R`, needs brms), the
-  mirt engine (mirt was not installable in the development environment).
+- PID-5 configuration checked against the original pipeline without data
+  (`scripts/check_pid5_against_original.R path/to/pid5_norming_pipeline.R`):
+  item keys and item order of all 92 outcomes, reverse keying, scoring of
+  random responses (identical to machine precision) and the 69 transfer
+  outcomes under the GESIS bridge all agree with the original. Differences
+  by design: normpipe also norms the 17 two-item PID5BF+ facets directly
+  (the original publishes the five DSM domains and the total of the
+  PID5BF+M only), and files the five directly observed DSM domains under
+  version `bfplus` (the original export lists them under `bfplus_m`).
+- Not yet run on real data: the PID-5 configuration, the mirt engine (mirt
+  was not installable in the development environment).
 - Raking uses `survey::rake`; margins are given with `make_margins()`.
 - Licence: to be chosen (LICENSE is a placeholder).

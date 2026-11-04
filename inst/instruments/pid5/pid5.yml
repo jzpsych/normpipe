@@ -4,21 +4,28 @@
 # bfplus_domain_key, bfplusm_anankastia_doublets, reverse_items).
 #
 # Versions: full (PID-5, 220 items), sf (PID-5-SF, 100 items), bf (PID-5-BF,
-# 25 items), bfplus (PID5BF+, 34 items: 17 facet doublets and the five DSM
-# domains), bfplus_m (PID5BF+M: Anankastia from three doublets and the
-# 30-item total). Facets are item means (GRM), domains are means of the three
-# primary facet means (bifactor, one specific factor per facet), totals are
-# item means over the five DSM domains (composite route over the component
-# models). Short-form facets and domains use the item parameters of the full
-# calibration restricted to their items (calibrate_from). PID5BF+ domains and
-# PID5BF+M Anankastia are calibrated as bifactor models with three two-item
-# specific factors whose slopes are constrained equal within a doublet
-# (equal_block_slopes), as in stage M3f of the original pipeline.
+# 25 items), bfplus_m (PID5BF+M, 36 items: the five DSM domains from three
+# facet doublets each, Anankastia from three doublets and the 30-item total).
+# Facets are item means (GRM), domains are means of the three primary facet
+# means (bifactor, one specific factor per facet), totals are item means over
+# the five DSM domains (composite route over the component models). Short-form
+# facets and domains use the item parameters of the full calibration
+# restricted to their items (calibrate_from). PID5BF+M domains and Anankastia
+# are calibrated as bifactor models with three two-item specific factors whose
+# slopes are constrained equal within a doublet (equal_block_slopes), as in
+# stage M3f of the original pipeline.
+#
+# The 17 two-item facet doublets of the PID5BF+ are a construction device
+# (balanced facet coverage within the domains), not scales of their own, and
+# are therefore not normed (decision J. Zimmermann, 2026-11-04). They remain
+# the bridge predictors of the transfer module. The five DSM domains of the
+# PID5BF+ and the PID5BF+M are identical and are filed under bfplus_m, as in
+# the original export; the PID5BF+ Anankastia composite is not normed.
 #
 # Reference sample (GESIS): only the 34 bridge items are observed, so the
-# PID5BF+ scales and the PID5BF+M scales take the direct route and everything
-# else needs the transfer module (M2). The mapping of the GESIS variables
-# gecl153a..gecl186a to item numbers is in gesis_bridge_map.csv.
+# five PID5BF+M domains and the PID5BF+M total take the direct route and
+# everything else needs the transfer module (M2). The mapping of the GESIS
+# variables gecl153a..gecl186a to item numbers is in gesis_bridge_map.csv.
 id: pid5
 name: Personality Inventory for DSM-5 (PID-5) and short forms
 report_step: 0.01
@@ -475,166 +482,59 @@ versions:
         metric: mean
         model: composite
         components: [negative_affectivity, detachment, antagonism, disinhibition, psychoticism]
-  - id: bfplus
-    label: PID5BF+ (34 Items)
+  - id: bfplus_m
+    label: PID5BF+M (36 Items)
     scales:
-      - id: emo_lability
-        label: Emotionale Labilität
-        level: facet
-        items: [62, 122]
-        metric: mean
-        model: grm
-        calibrate_from: full_emo_lability
-      - id: anxiousness
-        label: Ängstlichkeit
-        level: facet
-        items: [109, 110]
-        metric: mean
-        model: grm
-        calibrate_from: full_anxiousness
-      - id: separation_insec
-        label: Trennungsängstlichkeit
-        level: facet
-        items: [50, 64]
-        metric: mean
-        model: grm
-        calibrate_from: full_separation_insec
-      - id: withdrawal
-        label: Rückzug
-        level: facet
-        items: [82, 136]
-        metric: mean
-        model: grm
-        calibrate_from: full_withdrawal
-      - id: anhedonia
-        label: Anhedonie
-        level: facet
-        items: [23, 189]
-        metric: mean
-        model: grm
-        calibrate_from: full_anhedonia
-      - id: intimacy_avoid
-        label: Vermeidung von Intimität
-        level: facet
-        items: [89, 108]
-        metric: mean
-        model: grm
-        calibrate_from: full_intimacy_avoid
-      - id: manipulativeness
-        label: Manipulativität
-        level: facet
-        items: [162, 219]
-        metric: mean
-        model: grm
-        calibrate_from: full_manipulativeness
-      - id: deceitfulness
-        label: Unehrlichkeit
-        level: facet
-        items: [126, 218]
-        metric: mean
-        model: grm
-        calibrate_from: full_deceitfulness
-      - id: grandiosity
-        label: Grandiosität
-        level: facet
-        items: [187, 197]
-        metric: mean
-        model: grm
-        calibrate_from: full_grandiosity
-      - id: irresponsibility
-        label: Verantwortungslosigkeit
-        level: facet
-        items: [129, 160]
-        metric: mean
-        model: grm
-        calibrate_from: full_irresponsibility
-      - id: impulsivity
-        label: Impulsivität
-        level: facet
-        items: [4, 17]
-        metric: mean
-        model: grm
-        calibrate_from: full_impulsivity
-      - id: distractibility
-        label: Ablenkbarkeit
-        level: facet
-        items: [6, 132]
-        metric: mean
-        model: grm
-        calibrate_from: full_distractibility
-      - id: unusual_beliefs
-        label: Ungewöhnliche Überzeugungen
-        level: facet
-        items: [194, 209]
-        metric: mean
-        model: grm
-        calibrate_from: full_unusual_beliefs
-      - id: eccentricity
-        label: Exzentrizität
-        level: facet
-        items: [25, 185]
-        metric: mean
-        model: grm
-        calibrate_from: full_eccentricity
-      - id: percept_dysreg
-        label: Wahrnehmungsdysregulation
-        level: facet
-        items: [44, 77]
-        metric: mean
-        model: grm
-        calibrate_from: full_percept_dysreg
-      - id: perseveration
-        label: Perseveration
-        level: facet
-        items: [60, 128]
-        metric: mean
-        model: grm
-        calibrate_from: full_perseveration
-      - id: rigid_perfect
-        label: Rigider Perfektionismus
-        level: facet
-        items: [123, 176]
-        metric: mean
-        model: grm
-        calibrate_from: full_rigid_perfect
       - id: negative_affectivity
         label: Negative Affektivität
         level: domain
         metric: mean_of_means
         model: bifactor
-        components: [emo_lability, anxiousness, separation_insec]
         equal_block_slopes: true
+        components:
+          - {id: emo_lability, items: [62, 122]}
+          - {id: anxiousness, items: [109, 110]}
+          - {id: separation_insec, items: [50, 64]}
       - id: detachment
         label: Verschlossenheit
         level: domain
         metric: mean_of_means
         model: bifactor
-        components: [withdrawal, anhedonia, intimacy_avoid]
         equal_block_slopes: true
+        components:
+          - {id: withdrawal, items: [82, 136]}
+          - {id: anhedonia, items: [23, 189]}
+          - {id: intimacy_avoid, items: [89, 108]}
       - id: antagonism
         label: Antagonismus
         level: domain
         metric: mean_of_means
         model: bifactor
-        components: [manipulativeness, deceitfulness, grandiosity]
         equal_block_slopes: true
+        components:
+          - {id: manipulativeness, items: [162, 219]}
+          - {id: deceitfulness, items: [126, 218]}
+          - {id: grandiosity, items: [187, 197]}
       - id: disinhibition
         label: Enthemmtheit
         level: domain
         metric: mean_of_means
         model: bifactor
-        components: [irresponsibility, impulsivity, distractibility]
         equal_block_slopes: true
+        components:
+          - {id: irresponsibility, items: [129, 160]}
+          - {id: impulsivity, items: [4, 17]}
+          - {id: distractibility, items: [6, 132]}
       - id: psychoticism
         label: Psychotizismus
         level: domain
         metric: mean_of_means
         model: bifactor
-        components: [unusual_beliefs, eccentricity, percept_dysreg]
         equal_block_slopes: true
-  - id: bfplus_m
-    label: PID5BF+M (36 Items)
-    scales:
+        components:
+          - {id: unusual_beliefs, items: [194, 209]}
+          - {id: eccentricity, items: [25, 185]}
+          - {id: percept_dysreg, items: [44, 77]}
       - id: anankastia
         label: Anankasmus (Itemmittel über drei Doublets)
         level: domain

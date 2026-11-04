@@ -71,7 +71,7 @@ run_norming(inst, freq = freq, out_dir = "out", stages = c("P0", "M3a", "M3b", "
 ## Instrument YAML
 
 See `inst/instruments/demo7/demo7.yml` (small, all scale types) and
-`inst/instruments/pid5/pid5.yml` (the PID-5 family, 92 outcomes). Keys:
+`inst/instruments/pid5/pid5.yml` (the PID-5 family, 75 outcomes). Keys:
 
 - `items`: `n_items` (or `ids`), `prefix`, `categories`, optional `values`,
   `reverse`, per-item `overrides`.
@@ -94,13 +94,11 @@ See `inst/instruments/demo7/demo7.yml` (small, all scale types) and
   frames, prior mass per cell, grids, EAP monotonicity).
 - PID-5 configuration checked against the original pipeline without data
   (`scripts/check_pid5_against_original.R path/to/pid5_norming_pipeline.R`):
-  item keys and item order of all 92 outcomes, reverse keying, scoring of
-  random responses (identical to machine precision) and the 69 transfer
-  outcomes under the GESIS bridge all agree with the original. Differences
-  by design: normpipe also norms the 17 two-item PID5BF+ facets directly
-  (the original publishes the five DSM domains and the total of the
-  PID5BF+M only), and files the five directly observed DSM domains under
-  version `bfplus` (the original export lists them under `bfplus_m`).
+  item keys and item order of all 75 outcomes (31 full, 31 SF, 6 BF, 7
+  PID5BF+M), reverse keying, scoring of random responses (identical to
+  machine precision), the 69 transfer outcomes and the 6 direct outcomes
+  under the GESIS bridge all agree with the original. The 17 two-item facet
+  doublets of the PID5BF+ are bridge predictors only, not normed scales.
 - Transfer module (stage M2, brms with rstan) tested end to end on
   simulated data (`scripts/smoke_transfer.R`): with only four bridge items
   observed in the reference sample, the projected norms of the full-form

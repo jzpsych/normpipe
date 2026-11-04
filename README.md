@@ -104,4 +104,4 @@ See `inst/instruments/demo7/demo7.yml` (small, all scale types) and
 - Not yet run on real data: the PID-5 configuration, the mirt engine (mirt
   was not installable in the development environment).
 - Raking uses `survey::rake`; margins are given with `make_margins()`.
-- Licence: to be chosen (LICENSE is a placeholder).
+- Licence: GPL-3, see LICENSE.md.

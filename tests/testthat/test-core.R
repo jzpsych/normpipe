@@ -87,3 +87,13 @@ test_that("the Dirichlet prior adds exactly prior_mass per cell and keeps T mono
   # PR = P(X <= x): only the top score reaches 1 (clamped on the T scale)
   expect_true(all(nm$cells$pctl_med[nm$cells$raw < max(s$grid)] < 1))
 })
+
+test_that("partial item sets score only the scales whose items are present", {
+  inst <- demo_inst()
+  sim <- simulate_reference(inst, N = 50, seed = 2)
+  full <- score_scales(sim$items, inst)
+  part <- score_scales(sim$items[, c("it1", "it2", "it5", "it6")], inst, partial = TRUE)
+  expect_equal(part$short_a, full$short_a)
+  expect_true(all(is.na(part$full_a)) && all(is.na(part$full_total)))
+  expect_error(score_scales(sim$items[, c("it1", "it2")], inst), "missing")
+})

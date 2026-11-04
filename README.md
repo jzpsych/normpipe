@@ -101,7 +101,13 @@ See `inst/instruments/demo7/demo7.yml` (small, all scale types) and
   (the original publishes the five DSM domains and the total of the
   PID5BF+M only), and files the five directly observed DSM domains under
   version `bfplus` (the original export lists them under `bfplus_m`).
+- Transfer module (stage M2, brms with rstan) tested end to end on
+  simulated data (`scripts/smoke_transfer.R`): with only four bridge items
+  observed in the reference sample, the projected norms of the full-form
+  scales differ from the norms of the true full responses by 0.6 T (facet)
+  and 0.7 T (total) on average, and 97.5 % / 98.5 % of the true values lie
+  inside the norm bands (5th to 95th percentile).
 - Not yet run on real data: the PID-5 configuration, the mirt engine (mirt
-  was not installable in the development environment).
+  was not installable in the development environment), cmdstanr.
 - Raking uses `survey::rake`; margins are given with `make_margins()`.
 - Licence: GPL-3, see LICENSE.md.

@@ -31,11 +31,10 @@ bridge_scores <- function(items_df, inst) {
   idx <- item_indices(items_df, inst, items = unique(unlist(map(br, "items"))))
   vals <- item_values(idx, inst, items = unique(unlist(map(br, "items"))))
   unit <- attr(inst$items, "unit")
-  out <- map_dfc(br, \(b) {
+  out <- as_tibble(setNames(map(br, \(b) {
     cols <- inst$items$col[match(b$items, inst$items$item)]
     rowMeans(as.matrix(vals[cols]), na.rm = TRUE) * unit
-  })
-  names(out) <- paste0("br_", map_chr(br, "id"))
+  }), paste0("br_", map_chr(br, "id"))))
   all_items <- unique(unlist(map(br, "items")))
   out$br_mean <- rowMeans(as.matrix(vals[inst$items$col[match(all_items, inst$items$item)]]), na.rm = TRUE) * unit
   out

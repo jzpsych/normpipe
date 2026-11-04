@@ -1,0 +1,71 @@
+# Variant of demo7.yml with a transfer block: the reference sample answers
+# only items 1, 2, 5 and 6 (the bridge), the full-form scales are projected
+# from simulated donor samples (scripts/smoke_transfer.R).
+# Demo instrument for the synthetic test: 8 items with a seven-point response
+# format (1 to 7), two of them reverse-keyed, a sum-scored scale, a mean-scored
+# scale, a domain as mean of two component means (bifactor model) and a
+# composite total.
+id: demo7
+name: Demo instrument (seven-point format)
+report_step: 0.01
+items:
+  n_items: 8
+  prefix: "it"
+  categories: [1, 2, 3, 4, 5, 6, 7]
+  reverse: [3, 7]
+versions:
+  - id: full
+    label: Full form
+    scales:
+      - id: a
+        label: Scale A (items 1-4, mean)
+        level: facet
+        items: [1, 2, 3, 4]
+        metric: mean
+        model: grm
+      - id: b
+        label: Scale B (items 5-8, sum)
+        level: facet
+        items: [5, 6, 7, 8]
+        metric: sum
+        model: grm
+      - id: ab
+        label: Domain AB (mean of the two scale means)
+        level: domain
+        metric: mean_of_means
+        model: bifactor
+        components: [a, b]
+      - id: total
+        label: Total (item mean over all items)
+        level: total
+        metric: mean
+        model: composite
+        components: [a, b]
+  - id: short
+    label: Short form
+    scales:
+      - id: a
+        label: Scale A short (items 1-2)
+        level: facet
+        items: [1, 2]
+        metric: mean
+        model: grm
+        calibrate_from: full_a
+cells:
+  gender: [m, f]
+  age_breaks: [18, 40, 65, Inf]
+  ages: [18, 80]
+  kernel: {half_width0: 4, min_neff: 60, max_half_width: 12}
+uncertainty:
+  prior_mass: 1
+  n_boot: 20
+  n_param_draws: 10
+transfer:
+  enabled: true
+  reference_level: quota
+  n_draws: 100
+  bridge:
+    - {id: a2, items: [1, 2]}
+    - {id: b2, items: [5, 6]}
+measurement:
+  engine: auto

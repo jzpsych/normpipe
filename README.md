@@ -105,7 +105,19 @@ See `inst/instruments/demo7/demo7.yml` (small, all scale types) and
   scales differ from the norms of the true full responses by 0.6 T (facet)
   and 0.7 T (total) on average, and 97.5 % / 98.5 % of the true values lie
   inside the norm bands (5th to 95th percentile).
-- Not yet run on real data: the PID-5 configuration, the mirt engine (mirt
-  was not installable in the development environment), cmdstanr.
+- mirt engine tested on the demo instrument (`scripts/smoke.R` with
+  `measurement.engine: mirt`): 2.5 min instead of 12 min with the internal
+  estimator; the GRM scales agree with the internal estimator to within
+  0.5 T in every column of the norm table. The demo's bifactor domain (two
+  specific factors of four items) is weakly identified: mirt's Oakes
+  information matrix is singular at the default EM tolerance, so
+  `fit_with_mirt()` refits with `TOL = 1e-5` (then, as a last resort, with
+  the cross-product information); the resulting maximum-likelihood solution
+  differs from the penalised internal one in the conditional and integrated
+  intervals of that domain (about 1 T on average, up to 14 T in sparse
+  tails). The PID-5 domain models (three facets of 6 to 14 items) are not
+  expected to show this.
+- Not yet run on real data: the PID-5 configuration; cmdstanr not tested
+  (its download hosts were blocked in the development environment).
 - Raking uses `survey::rake`; margins are given with `make_margins()`.
 - Licence: GPL-3, see LICENSE.md.

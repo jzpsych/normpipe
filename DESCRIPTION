@@ -1,0 +1,48 @@
+Package: normpipe
+Type: Package
+Title: Population-Referenced Norms with Two Layers of Uncertainty for Any Questionnaire
+Version: 0.1.0
+Authors@R: c(
+    person("Johannes", "Zimmermann", email = "jz@uni-kassel.de",
+           role = c("aut", "cre")))
+Description: Generalization of the norming pipeline of Zimmermann, Kerber,
+    Kemper, and Weweck (2026, Getting the Personality Inventory for DSM-5
+    ready for clinical practice: Population-representative norms that embrace
+    uncertainty). An instrument is described in a configuration file (items
+    with their response categories, scales, reference cells, reference sample);
+    the pipeline then produces weighted percentile T norms per reporting cell
+    with credible bands from a Bayesian bootstrap under a Dirichlet prior over
+    the attainable scores (the direct route), continuous-age kernel norms,
+    score-conditional and integrated intervals for the individual from
+    calibrated graded response models, and the export formats of the scoring
+    platform. A transfer module for scales that the reference sample did not
+    answer (short-form bridge to full-length scales) is optional. The PID-5
+    norms of the original publication are the first use case and are
+    reproduced from the configuration in inst/instruments/pid5.
+License: file LICENSE
+Encoding: UTF-8
+Depends: R (>= 4.2)
+Imports:
+    dplyr,
+    purrr,
+    tibble,
+    tidyr,
+    readr,
+    rlang,
+    stats,
+    utils,
+    yaml,
+    statmod,
+    survey
+Suggests:
+    mirt,
+    brms,
+    cmdstanr,
+    rstan,
+    tidybayes,
+    lavaan,
+    semTools,
+    jsonlite,
+    testthat (>= 3.0.0)
+Config/testthat/edition: 3
+RoxygenNote: 7.3.1

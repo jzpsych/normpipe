@@ -1,0 +1,12 @@
+.Rproj.user/
+.Rhistory
+.RData
+.Ruserdata
+*.Rcheck/
+normpipe_*.tar.gz
+demo-out/
+out/
+# raw reference data never belong in this repository
+data-raw/private/
+*.sav
+*.rds

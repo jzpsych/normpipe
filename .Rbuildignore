@@ -1,0 +1,7 @@
+^\.git$
+^\.gitignore$
+^scripts$
+^demo-out$
+^\.github$
+^.*\.Rproj$
+^\.Rproj\.user$

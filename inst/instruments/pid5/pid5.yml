@@ -1,0 +1,669 @@
+# PID-5 family: configuration for normpipe, transcribed from the scoring keys
+# of the Zenodo pipeline (pid5_norming_pipeline.R, Section 1: facet_key,
+# domain_key, sf_facet_key, bf_domain_key, bfplus_facet_key,
+# bfplus_domain_key, bfplusm_anankastia_doublets, reverse_items).
+#
+# Versions: full (PID-5, 220 items), sf (PID-5-SF, 100 items), bf (PID-5-BF,
+# 25 items), bfplus (PID5BF+, 34 items: 17 facet doublets and the five DSM
+# domains), bfplus_m (PID5BF+M: Anankastia from three doublets and the
+# 30-item total). Facets are item means (GRM), domains are means of the three
+# primary facet means (bifactor, one specific factor per facet), totals are
+# item means over the five DSM domains (composite route over the component
+# models). Short-form facets and domains use the item parameters of the full
+# calibration restricted to their items (calibrate_from). PID5BF+ domains and
+# PID5BF+M Anankastia are calibrated as bifactor models with three two-item
+# specific factors whose slopes are constrained equal within a doublet
+# (equal_block_slopes), as in stage M3f of the original pipeline.
+#
+# Reference sample (GESIS): only the 34 bridge items are observed, so the
+# PID5BF+ scales and the PID5BF+M scales take the direct route and everything
+# else needs the transfer module (M2). The mapping of the GESIS variables
+# gecl153a..gecl186a to item numbers is in gesis_bridge_map.csv.
+id: pid5
+name: Personality Inventory for DSM-5 (PID-5) and short forms
+report_step: 0.01
+items:
+  n_items: 220
+  prefix: "PID_"
+  categories: [0, 1, 2, 3]
+  reverse: [7, 30, 35, 58, 87, 90, 96, 97, 98, 131, 142, 155, 164, 177, 210, 215]
+versions:
+  - id: full
+    label: PID-5 (220 Items)
+    scales:
+      - id: anhedonia
+        label: Anhedonie
+        level: facet
+        items: [1, 23, 26, 30, 124, 155, 157, 189]
+        metric: mean
+        model: grm
+      - id: anxiousness
+        label: Ängstlichkeit
+        level: facet
+        items: [79, 93, 95, 96, 109, 110, 130, 141, 174]
+        metric: mean
+        model: grm
+      - id: attention_seek
+        label: Aufmerksamkeitssuche
+        level: facet
+        items: [14, 43, 74, 111, 113, 173, 191, 211]
+        metric: mean
+        model: grm
+      - id: callousness
+        label: Gefühlskälte
+        level: facet
+        items: [11, 13, 19, 54, 72, 73, 90, 153, 166, 183, 198, 200, 207, 208]
+        metric: mean
+        model: grm
+      - id: deceitfulness
+        label: Unehrlichkeit
+        level: facet
+        items: [41, 53, 56, 76, 126, 134, 142, 206, 214, 218]
+        metric: mean
+        model: grm
+      - id: depressivity
+        label: Depressivität
+        level: facet
+        items: [27, 61, 66, 81, 86, 104, 119, 148, 151, 163, 168, 169, 178, 212]
+        metric: mean
+        model: grm
+      - id: distractibility
+        label: Ablenkbarkeit
+        level: facet
+        items: [6, 29, 47, 68, 88, 118, 132, 144, 199]
+        metric: mean
+        model: grm
+      - id: eccentricity
+        label: Exzentrizität
+        level: facet
+        items: [5, 21, 24, 25, 33, 52, 55, 70, 71, 152, 172, 185, 205]
+        metric: mean
+        model: grm
+      - id: emo_lability
+        label: Emotionale Labilität
+        level: facet
+        items: [18, 62, 102, 122, 138, 165, 181]
+        metric: mean
+        model: grm
+      - id: grandiosity
+        label: Grandiosität
+        level: facet
+        items: [40, 65, 114, 179, 187, 197]
+        metric: mean
+        model: grm
+      - id: hostility
+        label: Feindseligkeit
+        level: facet
+        items: [28, 32, 38, 85, 92, 116, 158, 170, 188, 216]
+        metric: mean
+        model: grm
+      - id: impulsivity
+        label: Impulsivität
+        level: facet
+        items: [4, 16, 17, 22, 58, 204]
+        metric: mean
+        model: grm
+      - id: intimacy_avoid
+        label: Vermeidung von Intimität
+        level: facet
+        items: [89, 97, 108, 120, 145, 203]
+        metric: mean
+        model: grm
+      - id: irresponsibility
+        label: Verantwortungslosigkeit
+        level: facet
+        items: [31, 129, 156, 160, 171, 201, 210]
+        metric: mean
+        model: grm
+      - id: manipulativeness
+        label: Manipulativität
+        level: facet
+        items: [107, 125, 162, 180, 219]
+        metric: mean
+        model: grm
+      - id: percept_dysreg
+        label: Wahrnehmungsdysregulation
+        level: facet
+        items: [36, 37, 42, 44, 59, 77, 83, 154, 192, 193, 213, 217]
+        metric: mean
+        model: grm
+      - id: perseveration
+        label: Perseveration
+        level: facet
+        items: [46, 51, 60, 78, 80, 100, 121, 128, 137]
+        metric: mean
+        model: grm
+      - id: restricted_aff
+        label: Eingeschränkte Affektivität
+        level: facet
+        items: [8, 45, 84, 91, 101, 167, 184]
+        metric: mean
+        model: grm
+      - id: rigid_perfect
+        label: Rigider Perfektionismus
+        level: facet
+        items: [34, 49, 105, 115, 123, 135, 140, 176, 196, 220]
+        metric: mean
+        model: grm
+      - id: risk_taking
+        label: Risikoverhalten
+        level: facet
+        items: [3, 7, 35, 39, 48, 67, 69, 87, 98, 112, 159, 164, 195, 215]
+        metric: mean
+        model: grm
+      - id: separation_insec
+        label: Trennungsängstlichkeit
+        level: facet
+        items: [12, 50, 57, 64, 127, 149, 175]
+        metric: mean
+        model: grm
+      - id: submissiveness
+        label: Unterwürfigkeit
+        level: facet
+        items: [9, 15, 63, 202]
+        metric: mean
+        model: grm
+      - id: suspiciousness
+        label: Misstrauen
+        level: facet
+        items: [2, 103, 117, 131, 133, 177, 190]
+        metric: mean
+        model: grm
+      - id: unusual_beliefs
+        label: Ungewöhnliche Überzeugungen
+        level: facet
+        items: [94, 99, 106, 139, 143, 150, 194, 209]
+        metric: mean
+        model: grm
+      - id: withdrawal
+        label: Rückzug
+        level: facet
+        items: [10, 20, 75, 82, 136, 146, 147, 161, 182, 186]
+        metric: mean
+        model: grm
+      - id: negative_affectivity
+        label: Negative Affektivität
+        level: domain
+        metric: mean_of_means
+        model: bifactor
+        components: [emo_lability, anxiousness, separation_insec]
+      - id: detachment
+        label: Verschlossenheit
+        level: domain
+        metric: mean_of_means
+        model: bifactor
+        components: [withdrawal, anhedonia, intimacy_avoid]
+      - id: antagonism
+        label: Antagonismus
+        level: domain
+        metric: mean_of_means
+        model: bifactor
+        components: [manipulativeness, deceitfulness, grandiosity]
+      - id: disinhibition
+        label: Enthemmtheit
+        level: domain
+        metric: mean_of_means
+        model: bifactor
+        components: [irresponsibility, impulsivity, distractibility]
+      - id: psychoticism
+        label: Psychotizismus
+        level: domain
+        metric: mean_of_means
+        model: bifactor
+        components: [unusual_beliefs, eccentricity, percept_dysreg]
+      - id: total
+        label: Gesamtwert (Itemmittel über die fünf DSM-5-Domänen, 220 Items)
+        level: total
+        metric: mean
+        model: composite
+        components: [anhedonia, anxiousness, attention_seek, callousness, deceitfulness, depressivity, distractibility, eccentricity, emo_lability, grandiosity, hostility, impulsivity, intimacy_avoid, irresponsibility, manipulativeness, percept_dysreg, perseveration, restricted_aff, rigid_perfect, risk_taking, separation_insec, submissiveness, suspiciousness, unusual_beliefs, withdrawal]
+  - id: sf
+    label: PID-5-SF (100 Items)
+    scales:
+      - id: anhedonia
+        label: Anhedonie
+        level: facet
+        items: [23, 26, 124, 157]
+        metric: mean
+        model: grm
+        calibrate_from: full_anhedonia
+      - id: anxiousness
+        label: Ängstlichkeit
+        level: facet
+        items: [79, 109, 130, 174]
+        metric: mean
+        model: grm
+        calibrate_from: full_anxiousness
+      - id: attention_seek
+        label: Aufmerksamkeitssuche
+        level: facet
+        items: [74, 173, 191, 211]
+        metric: mean
+        model: grm
+        calibrate_from: full_attention_seek
+      - id: callousness
+        label: Gefühlskälte
+        level: facet
+        items: [19, 153, 166, 183]
+        metric: mean
+        model: grm
+        calibrate_from: full_callousness
+      - id: deceitfulness
+        label: Unehrlichkeit
+        level: facet
+        items: [53, 134, 206, 218]
+        metric: mean
+        model: grm
+        calibrate_from: full_deceitfulness
+      - id: depressivity
+        label: Depressivität
+        level: facet
+        items: [81, 151, 163, 169]
+        metric: mean
+        model: grm
+        calibrate_from: full_depressivity
+      - id: distractibility
+        label: Ablenkbarkeit
+        level: facet
+        items: [118, 132, 144, 199]
+        metric: mean
+        model: grm
+        calibrate_from: full_distractibility
+      - id: eccentricity
+        label: Exzentrizität
+        level: facet
+        items: [25, 70, 152, 205]
+        metric: mean
+        model: grm
+        calibrate_from: full_eccentricity
+      - id: emo_lability
+        label: Emotionale Labilität
+        level: facet
+        items: [122, 138, 165, 181]
+        metric: mean
+        model: grm
+        calibrate_from: full_emo_lability
+      - id: grandiosity
+        label: Grandiosität
+        level: facet
+        items: [40, 114, 187, 197]
+        metric: mean
+        model: grm
+        calibrate_from: full_grandiosity
+      - id: hostility
+        label: Feindseligkeit
+        level: facet
+        items: [38, 92, 158, 170]
+        metric: mean
+        model: grm
+        calibrate_from: full_hostility
+      - id: impulsivity
+        label: Impulsivität
+        level: facet
+        items: [4, 16, 17, 22]
+        metric: mean
+        model: grm
+        calibrate_from: full_impulsivity
+      - id: intimacy_avoid
+        label: Vermeidung von Intimität
+        level: facet
+        items: [89, 120, 145, 203]
+        metric: mean
+        model: grm
+        calibrate_from: full_intimacy_avoid
+      - id: irresponsibility
+        label: Verantwortungslosigkeit
+        level: facet
+        items: [129, 156, 160, 171]
+        metric: mean
+        model: grm
+        calibrate_from: full_irresponsibility
+      - id: manipulativeness
+        label: Manipulativität
+        level: facet
+        items: [107, 125, 162, 219]
+        metric: mean
+        model: grm
+        calibrate_from: full_manipulativeness
+      - id: percept_dysreg
+        label: Wahrnehmungsdysregulation
+        level: facet
+        items: [44, 154, 192, 217]
+        metric: mean
+        model: grm
+        calibrate_from: full_percept_dysreg
+      - id: perseveration
+        label: Perseveration
+        level: facet
+        items: [60, 80, 100, 128]
+        metric: mean
+        model: grm
+        calibrate_from: full_perseveration
+      - id: restricted_aff
+        label: Eingeschränkte Affektivität
+        level: facet
+        items: [84, 91, 167, 184]
+        metric: mean
+        model: grm
+        calibrate_from: full_restricted_aff
+      - id: rigid_perfect
+        label: Rigider Perfektionismus
+        level: facet
+        items: [105, 123, 176, 196]
+        metric: mean
+        model: grm
+        calibrate_from: full_rigid_perfect
+      - id: risk_taking
+        label: Risikoverhalten
+        level: facet
+        items: [39, 48, 67, 159]
+        metric: mean
+        model: grm
+        calibrate_from: full_risk_taking
+      - id: separation_insec
+        label: Trennungsängstlichkeit
+        level: facet
+        items: [50, 127, 149, 175]
+        metric: mean
+        model: grm
+        calibrate_from: full_separation_insec
+      - id: submissiveness
+        label: Unterwürfigkeit
+        level: facet
+        items: [9, 15, 63, 202]
+        metric: mean
+        model: grm
+        calibrate_from: full_submissiveness
+      - id: suspiciousness
+        label: Misstrauen
+        level: facet
+        items: [2, 117, 133, 190]
+        metric: mean
+        model: grm
+        calibrate_from: full_suspiciousness
+      - id: unusual_beliefs
+        label: Ungewöhnliche Überzeugungen
+        level: facet
+        items: [106, 139, 150, 209]
+        metric: mean
+        model: grm
+        calibrate_from: full_unusual_beliefs
+      - id: withdrawal
+        label: Rückzug
+        level: facet
+        items: [82, 136, 146, 186]
+        metric: mean
+        model: grm
+        calibrate_from: full_withdrawal
+      - id: negative_affectivity
+        label: Negative Affektivität
+        level: domain
+        metric: mean_of_means
+        model: bifactor
+        components: [emo_lability, anxiousness, separation_insec]
+        calibrate_from: full_negative_affectivity
+      - id: detachment
+        label: Verschlossenheit
+        level: domain
+        metric: mean_of_means
+        model: bifactor
+        components: [withdrawal, anhedonia, intimacy_avoid]
+        calibrate_from: full_detachment
+      - id: antagonism
+        label: Antagonismus
+        level: domain
+        metric: mean_of_means
+        model: bifactor
+        components: [manipulativeness, deceitfulness, grandiosity]
+        calibrate_from: full_antagonism
+      - id: disinhibition
+        label: Enthemmtheit
+        level: domain
+        metric: mean_of_means
+        model: bifactor
+        components: [irresponsibility, impulsivity, distractibility]
+        calibrate_from: full_disinhibition
+      - id: psychoticism
+        label: Psychotizismus
+        level: domain
+        metric: mean_of_means
+        model: bifactor
+        components: [unusual_beliefs, eccentricity, percept_dysreg]
+        calibrate_from: full_psychoticism
+      - id: total
+        label: Gesamtwert (100 Items)
+        level: total
+        metric: mean
+        model: composite
+        components: [anhedonia, anxiousness, attention_seek, callousness, deceitfulness, depressivity, distractibility, eccentricity, emo_lability, grandiosity, hostility, impulsivity, intimacy_avoid, irresponsibility, manipulativeness, percept_dysreg, perseveration, restricted_aff, rigid_perfect, risk_taking, separation_insec, submissiveness, suspiciousness, unusual_beliefs, withdrawal]
+  - id: bf
+    label: PID-5-BF (25 Items)
+    scales:
+      - id: negative_affectivity
+        label: Negative Affektivität
+        level: domain
+        items: [110, 122, 127, 128, 158]
+        metric: mean
+        model: grm
+      - id: detachment
+        label: Verschlossenheit
+        level: domain
+        items: [27, 145, 146, 161, 189]
+        metric: mean
+        model: grm
+      - id: antagonism
+        label: Antagonismus
+        level: domain
+        items: [166, 191, 197, 206, 219]
+        metric: mean
+        model: grm
+      - id: disinhibition
+        label: Enthemmtheit
+        level: domain
+        items: [3, 4, 17, 31, 47]
+        metric: mean
+        model: grm
+      - id: psychoticism
+        label: Psychotizismus
+        level: domain
+        items: [52, 139, 205, 213, 217]
+        metric: mean
+        model: grm
+      - id: total
+        label: Gesamtwert (25 Items)
+        level: total
+        metric: mean
+        model: composite
+        components: [negative_affectivity, detachment, antagonism, disinhibition, psychoticism]
+  - id: bfplus
+    label: PID5BF+ (34 Items)
+    scales:
+      - id: emo_lability
+        label: Emotionale Labilität
+        level: facet
+        items: [62, 122]
+        metric: mean
+        model: grm
+        calibrate_from: full_emo_lability
+      - id: anxiousness
+        label: Ängstlichkeit
+        level: facet
+        items: [109, 110]
+        metric: mean
+        model: grm
+        calibrate_from: full_anxiousness
+      - id: separation_insec
+        label: Trennungsängstlichkeit
+        level: facet
+        items: [50, 64]
+        metric: mean
+        model: grm
+        calibrate_from: full_separation_insec
+      - id: withdrawal
+        label: Rückzug
+        level: facet
+        items: [82, 136]
+        metric: mean
+        model: grm
+        calibrate_from: full_withdrawal
+      - id: anhedonia
+        label: Anhedonie
+        level: facet
+        items: [23, 189]
+        metric: mean
+        model: grm
+        calibrate_from: full_anhedonia
+      - id: intimacy_avoid
+        label: Vermeidung von Intimität
+        level: facet
+        items: [89, 108]
+        metric: mean
+        model: grm
+        calibrate_from: full_intimacy_avoid
+      - id: manipulativeness
+        label: Manipulativität
+        level: facet
+        items: [162, 219]
+        metric: mean
+        model: grm
+        calibrate_from: full_manipulativeness
+      - id: deceitfulness
+        label: Unehrlichkeit
+        level: facet
+        items: [126, 218]
+        metric: mean
+        model: grm
+        calibrate_from: full_deceitfulness
+      - id: grandiosity
+        label: Grandiosität
+        level: facet
+        items: [187, 197]
+        metric: mean
+        model: grm
+        calibrate_from: full_grandiosity
+      - id: irresponsibility
+        label: Verantwortungslosigkeit
+        level: facet
+        items: [129, 160]
+        metric: mean
+        model: grm
+        calibrate_from: full_irresponsibility
+      - id: impulsivity
+        label: Impulsivität
+        level: facet
+        items: [4, 17]
+        metric: mean
+        model: grm
+        calibrate_from: full_impulsivity
+      - id: distractibility
+        label: Ablenkbarkeit
+        level: facet
+        items: [6, 132]
+        metric: mean
+        model: grm
+        calibrate_from: full_distractibility
+      - id: unusual_beliefs
+        label: Ungewöhnliche Überzeugungen
+        level: facet
+        items: [194, 209]
+        metric: mean
+        model: grm
+        calibrate_from: full_unusual_beliefs
+      - id: eccentricity
+        label: Exzentrizität
+        level: facet
+        items: [25, 185]
+        metric: mean
+        model: grm
+        calibrate_from: full_eccentricity
+      - id: percept_dysreg
+        label: Wahrnehmungsdysregulation
+        level: facet
+        items: [44, 77]
+        metric: mean
+        model: grm
+        calibrate_from: full_percept_dysreg
+      - id: perseveration
+        label: Perseveration
+        level: facet
+        items: [60, 128]
+        metric: mean
+        model: grm
+        calibrate_from: full_perseveration
+      - id: rigid_perfect
+        label: Rigider Perfektionismus
+        level: facet
+        items: [123, 176]
+        metric: mean
+        model: grm
+        calibrate_from: full_rigid_perfect
+      - id: negative_affectivity
+        label: Negative Affektivität
+        level: domain
+        metric: mean_of_means
+        model: bifactor
+        components: [emo_lability, anxiousness, separation_insec]
+        equal_block_slopes: true
+      - id: detachment
+        label: Verschlossenheit
+        level: domain
+        metric: mean_of_means
+        model: bifactor
+        components: [withdrawal, anhedonia, intimacy_avoid]
+        equal_block_slopes: true
+      - id: antagonism
+        label: Antagonismus
+        level: domain
+        metric: mean_of_means
+        model: bifactor
+        components: [manipulativeness, deceitfulness, grandiosity]
+        equal_block_slopes: true
+      - id: disinhibition
+        label: Enthemmtheit
+        level: domain
+        metric: mean_of_means
+        model: bifactor
+        components: [irresponsibility, impulsivity, distractibility]
+        equal_block_slopes: true
+      - id: psychoticism
+        label: Psychotizismus
+        level: domain
+        metric: mean_of_means
+        model: bifactor
+        components: [unusual_beliefs, eccentricity, percept_dysreg]
+        equal_block_slopes: true
+  - id: bfplus_m
+    label: PID5BF+M (36 Items)
+    scales:
+      - id: anankastia
+        label: Anankasmus (Itemmittel über drei Doublets)
+        level: domain
+        metric: mean
+        model: bifactor
+        equal_block_slopes: true
+        components:
+          - {id: perfectionism, items: [123, 176]}
+          - {id: rigidity, items: [140, 220]}
+          - {id: orderliness, items: [34, 115]}
+      - id: total
+        label: Gesamtwert (30 Brückenitems der fünf DSM-5-Domänen)
+        level: total
+        metric: mean
+        model: composite
+        components:
+          - {id: negative_affectivity, items: [62, 122, 109, 110, 50, 64]}
+          - {id: detachment, items: [82, 136, 23, 189, 89, 108]}
+          - {id: antagonism, items: [162, 219, 126, 218, 187, 197]}
+          - {id: disinhibition, items: [129, 160, 4, 17, 6, 132]}
+          - {id: psychoticism, items: [194, 209, 25, 185, 44, 77]}
+cells:
+  gender: [m, f]
+  age_breaks: [18, 35, 50, 65, Inf]
+  ages: [18, 100]
+  kernel: {half_width0: 4, min_neff: 150, max_half_width: 12}
+uncertainty:
+  prior_mass: 1
+  n_boot: 200
+  n_param_draws: 50
+measurement:
+  engine: auto

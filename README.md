@@ -1,55 +1,42 @@
 # normpipe
 
-Bayesian norming pipeline for self-report questionnaires, generalised from the
-PID-5 norming pipeline (Zimmermann et al., preprint; Zenodo code). The PID-5
-family is the first use case (`inst/instruments/pid5/`); any instrument is
-described by a YAML file and normed with the same code.
+Population-referenced norms with two layers of uncertainty for self-report
+questionnaires.
 
-What the pipeline does (one instrument, several versions and scales):
+normpipe turns a weighted reference sample (or published frequency tables)
+into norm tables for any questionnaire that is described by a YAML
+configuration file. It reports two kinds of uncertainty:
 
-| Stage | Content | Original module |
-|------|---------|-----------------|
-| P0 | scoring of the reference sample, raking to population margins, route per scale (direct or transfer) | data preparation |
-| M1 | calibration of the item models in the norm (or a calibration) sample: GRM per facet, bifactor per domain, composite route for totals | Module 1 |
-| M2 | optional: transfer models from bridge items to unobserved scales (brms), projection into the reference sample | Module 2 |
-| M3a | band norms (percentile ranks and T) per reporting cell and overall, with norm bands from Bayesian bootstrap draws | Module 3 |
-| M3b | continuous-age norms (Epanechnikov kernel, adaptive half width) | Module 3 |
-| M3c | score-conditional EAP tables (Lord–Wingersky recursion, population prior of the cell) | Module 3 |
-| M3d | integrated intervals (item-parameter draws × norm-level draws) | Module 3 |
-| X1 | exports: long norm table, platform CSV per version, portal JSON | export_platform_tables |
+- **uncertainty of the norm values**: every percentile rank and T value comes
+  with a credible band from a Bayesian bootstrap under a Dirichlet prior over
+  the attainable scores;
+- **measurement error of the individual score**: score-conditional and
+  integrated intervals on the T metric from calibrated item response models
+  (graded response, bifactor and composite models). The integrated interval
+  also contains the uncertainty of the norm values.
 
-Design decisions (agreed with J. Zimmermann, 2026-11-04):
-
-- **No fixed response format.** Categories, values (including reverse keying,
-  non-uniform values such as 0/1/2/1/0 and half-unit values) and the number
-  of items come from the instrument YAML. Attainable scores follow from the
-  value sets by convolution.
-- **Direct route with Dirichlet prior as default.** Every cell gets
-  `prior_mass` pseudo-observations spread uniformly over the attainable
-  scores (uniform base measure, as in the preprint), then Bayesian bootstrap
-  draws give norm bands. The transfer module is optional and only used for
-  scales whose items the reference sample did not see.
-- **Frequency-only input.** `frequency_frame()` builds the same draw frame
-  from a table of counts per cell and score (weighted counts keep their
-  uncertainty through an optional `n_obs`), so published frequency tables can
-  be normed without raw data; individual intervals then need item parameters
-  (`models`).
-- **Measurement model calibrated in the norm sample** by default (`calib`
-  overrides). The engine is `mirt` when installed, otherwise a built-in
-  penalised marginal-ML estimator for GRM and bifactor models (slower, for
-  short scales and tests).
-- Item models run on value-ordered categories, so reverse-keyed items keep a
-  positive slope and the category indices of the data never enter the models.
-
-## Install and run
+## Installation
 
 ```r
 # install.packages("remotes")
 remotes::install_github("jzpsych/normpipe")
+```
+
+Optional packages:
+
+| Package | Needed for |
+|---|---|
+| `mirt` | fast calibration of the item models (otherwise a built-in, slower estimator is used) |
+| `brms` with `cmdstanr` or `rstan` | the transfer module (stage `M2`); cmdstanr is used when installed and needs CmdStan (`cmdstanr::install_cmdstan()`) |
+| `jsonlite` | the JSON export |
+
+## Quick start
+
+```r
 library(normpipe)
 inst <- read_instrument(system.file("instruments/demo7/demo7.yml", package = "normpipe"))
-scale_registry(inst)                      # every version_scale outcome
-sim <- simulate_reference(inst, N = 1500) # or your own list(meta, items)
+scale_registry(inst)                       # every <version>_<scale> outcome
+sim <- simulate_reference(inst, N = 1500)  # or your own list(meta, items)
 res <- run_norming(inst, ref = list(meta = sim$meta, items = sim$items),
                    out_dir = "demo-out",
                    stages = c("P0", "M1", "M3a", "M3b", "M3c", "M3d", "X1"))
@@ -57,78 +44,93 @@ res <- run_norming(inst, ref = list(meta = sim$meta, items = sim$items),
 
 `ref$meta` needs `id`, `age`, `gender` and optionally `weight`; `ref$items`
 holds the item columns named `<prefix><item>`. Results and per-scale caches
-land in `out_dir` (`norm_tables_long.csv`, `norm_tables_age_continuous.csv`,
-`platform/norms_<version>.csv`, `portal/<instrument>.json`,
-`x1_reliability.csv`). Stages are skipped when their cache exists.
+are written to `out_dir`; a stage is skipped for a scale when its cache file
+exists.
 
-Frequency tables instead of raw data:
+Norms from frequency tables instead of raw data:
 
 ```r
-freq <- list(full_a = tibble(gender = "f", age_group = "[18,40)", score = 0:24, count = ...))
-run_norming(inst, freq = freq, out_dir = "out", stages = c("P0", "M3a", "M3b", "X1"))
+freq <- list(full_b = data.frame(gender = "f", age_group = "[18,40)",
+                                 score = 0:24, count = c(...)))
+run_norming(inst, freq = freq, out_dir = "out", stages = c("P0", "M3a", "X1"))
 ```
 
-## Instrument YAML
+The getting-started vignette (`vignette("normpipe")`) walks through the
+pipeline step by step; `vignette("instrument-config")` documents every key of
+the configuration file.
 
-See `inst/instruments/demo7/demo7.yml` (small, all scale types) and
-`inst/instruments/pid5/pid5.yml` (the PID-5 family, 75 outcomes). Keys:
+## Pipeline stages
 
-- `items`: `n_items` (or `ids`), `prefix`, `categories`, optional `values`,
-  `reverse`, per-item `overrides`.
-- `versions[].scales[]`: `id`, `label`, `level`, `items` or `components`
-  (earlier scales of the version or inline `{id, items}` lists), `metric`
-  (`sum`, `mean`, `mean_of_means`), `model` (`grm`, `bifactor`, `composite`,
-  `none`), optional `calibrate_from: <version>_<scale>` (short forms use the
-  long form's item parameters), `equal_block_slopes` (doublet bifactor
-  models), `min_answered`, `observed`.
-- `cells`: `gender`, `age_breaks`, `ages`, `kernel`; `uncertainty`:
-  `prior_mass`, `n_boot`, `n_param_draws`, `probs`, `pctl_clamp`,
-  `pctl_convention` (`midpoint`, the default: PR = P(X < x) + ½ P(X = x), the
-  classical percentile rank of Lienert & Raatz, whose mean over the norm
-  sample is exactly 50; `cumulative`: PR = P(X ≤ x), the convention of the
-  PID-5 preprint v2, IPO-16 and LPFS-BF tables, kept as an option to
-  reproduce them; decision J. Zimmermann 2026-11-05, the PID-5 manuscript
-  moves to midpoint in its revision); `measurement.engine`: `auto`,
-  `mirt`, `internal`.
+| Stage | Content |
+|---|---|
+| `P0` | scoring of the reference sample, optional raking to population margins, route per scale (direct, frequency or transfer) |
+| `M1` | calibration of the item models in the reference (or a separate calibration) sample: GRM per scale, bifactor per domain, composite route for totals |
+| `M2` | optional transfer module: Bayesian distributional regression (brms) from bridge items to scales the reference sample did not answer, projection into the reference sample |
+| `M3a` | band norms (percentile ranks and T) per reporting cell and overall, with norm bands |
+| `M3b` | continuous-age norms (Epanechnikov kernel with adaptive half-width) |
+| `M3c` | score-conditional intervals (summed-score EAP, Lord–Wingersky recursion, population prior of the cell) |
+| `M3d` | integrated intervals (item-parameter draws × norm-value draws) |
+| `X1` | exports: long norm table, continuous-age table, compact per-version tables, JSON norm file, marginal reliabilities |
 
-## Status (2026-11-04)
+## Design
 
-- Tested end to end on the simulated demo instrument (`scripts/smoke.R`):
-  GRM facets, sum and mean scales, a bifactor domain, a composite total and a
-  short form calibrated from the long form; 27 unit tests
-  (`tests/testthat`: Lord–Wingersky vs brute force, frequency vs individual
-  frames, prior mass per cell, grids, EAP monotonicity).
-- PID-5 configuration checked against the original pipeline without data
-  (`scripts/check_pid5_against_original.R path/to/pid5_norming_pipeline.R`):
-  item keys and item order of all 75 outcomes (31 full, 31 SF, 6 BF, 7
-  PID5BF+M), reverse keying, scoring of random responses (identical to
-  machine precision), the 69 transfer outcomes and the 6 direct outcomes
-  under the GESIS bridge all agree with the original. The 17 two-item facet
-  doublets of the PID5BF+ are bridge predictors only, not normed scales.
-- Transfer module (stage M2, brms with rstan) tested end to end on
-  simulated data (`scripts/smoke_transfer.R`): with only four bridge items
-  observed in the reference sample, the projected norms of the full-form
-  scales differ from the norms of the true full responses by 0.6 T (facet)
-  and 0.7 T (total) on average, and 97.5 % / 98.5 % of the true values lie
-  inside the norm bands (5th to 95th percentile).
-- mirt engine tested on the demo instrument (`scripts/smoke.R` with
-  `measurement.engine: mirt`): 2.5 min instead of 12 min with the internal
-  estimator; the GRM scales agree with the internal estimator to within
-  0.5 T in every column of the norm table. The demo's bifactor domain (two
-  specific factors of four items) is weakly identified: mirt's Oakes
-  information matrix is singular at the default EM tolerance, so
-  `fit_with_mirt()` refits with `TOL = 1e-5` (then, as a last resort, with
-  the cross-product information; on the demo the EM still reports
-  non-convergence after 5000 cycles at that tolerance, with the specific
-  factor of one block collapsing towards zero); the resulting maximum-likelihood solution
-  differs from the penalised internal one in the conditional and integrated
-  intervals of that domain (about 1 T on average, up to 14 T in sparse
-  tails). The PID-5 domain models (three facets of 6 to 14 items) are not
-  expected to show this.
-- cmdstanr backend of the transfer module tested on the same simulated
-  case (CmdStan 2.36.0): 37 min including model compilation, T values
-  within 0.1 to 0.4 T of the rstan run on average (MCMC noise); both
-  backends work, cmdstanr stays the default when installed.
-- Not yet run on real data: the PID-5 configuration.
-- Raking uses `survey::rake`; margins are given with `make_margins()`.
-- Licence: GPL-3, see LICENSE.md.
+- **Any response format.** Categories, item values (including reverse keying,
+  non-uniform values such as 0/1/2/1/0 and half-unit values) and the number
+  of items come from the configuration. Attainable scores follow from the
+  value sets by convolution; scales can be sums, means or means of component
+  means.
+- **Direct route with a Dirichlet prior.** Every reporting cell receives
+  `prior_mass` pseudo-observations spread uniformly over the attainable
+  scores; Bayesian-bootstrap draws then give the norm bands.
+- **Frequency input.** `frequency_frame()` builds the same draw frame from
+  counts per cell and score (weighted counts keep their uncertainty through
+  an optional `n_obs` column), so published frequency tables can be normed
+  without raw data. Individual intervals then need item parameters
+  (`models`).
+- **Measurement model calibrated in the norm sample** by default; a separate
+  calibration sample (`calib`) or pre-fitted models (`models`) can be given.
+  Short forms can use the item parameters of the long form
+  (`calibrate_from`).
+- **Percentile convention.** By default the percentile rank is the midpoint
+  rank PR = P(X < x) + ½ P(X = x), whose mean over the norm sample is exactly
+  50. `uncertainty: pctl_convention: cumulative` switches to the relative
+  cumulative frequency PR = P(X ≤ x). T = 50 + 10 Φ⁻¹(PR).
+- **Optional transfer module** for scales whose items the reference sample did
+  not answer: a bridge of items answered by the reference sample and by donor
+  samples predicts the missing scales.
+
+## Output files
+
+| File | Content |
+|---|---|
+| `norm_tables_long.csv` | one row per version, scale, reporting cell and raw score: percentile rank with band, T with band, score-conditional and integrated interval, extrapolation flag, effective N |
+| `norm_tables_age_continuous.csv` | continuous-age norms per gender and year of age |
+| `platform/norms_<version>.csv` | compact per-version tables (raw score, T, integrated interval, percentile rank, extrapolation flag) |
+| `portal/<instrument>.json` | JSON norm file per instrument (German keys) |
+| `x1_reliability.csv` | marginal reliability of every scale with an item model |
+| `p0_scale_registry.csv` | scales with their route |
+
+Example output of the demo instrument is in `inst/examples/`.
+
+## Example configurations
+
+- `inst/instruments/demo7/demo7.yml`: a small instrument with a seven-point
+  format that uses every scale type (sum, mean, mean of means; GRM,
+  bifactor, composite; a short form calibrated from the long form).
+- `inst/instruments/demo7/demo7_transfer.yml`: the same with a transfer block.
+- `inst/instruments/pid5/pid5.yml`: the Personality Inventory for DSM-5 and
+  its short forms (75 scales in four versions), including a transfer block
+  for a reference sample that answered only 34 bridge items.
+
+## Testing
+
+`tests/testthat` holds the unit tests (Lord–Wingersky recursion against brute
+force, frequency versus individual input, prior mass per cell, grids, EAP
+monotonicity, percentile conventions). `scripts/smoke.R` runs the whole
+pipeline on simulated data for the demo instrument; `scripts/smoke_transfer.R`
+runs the transfer module on simulated data and compares the projected norms
+with the norms of the known full responses.
+
+## Licence
+
+GPL-3, see `LICENSE.md`.

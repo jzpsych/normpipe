@@ -1,27 +1,27 @@
 # ==============================================================================
 # instrument.R -- the instrument configuration
 #
-# Everything that was PID-5-specific in the original pipeline (scoring keys,
-# versions, response format, reference cells, sample loaders) is read from one
-# YAML file per instrument and turned into an object of class
-# "normpipe_instrument". Every other part of the package works from that
-# object alone. The PID-5 configuration in inst/instruments/pid5 reproduces
-# the scale registry (scale_specs) of the original driver.
+# Everything that is specific to an instrument (items and response format,
+# versions and scales, reporting cells, uncertainty settings, measurement and
+# transfer options) is read from one YAML file per instrument and turned into
+# an object of class "normpipe_instrument". Every other part of the package
+# works from that object alone. The full list of keys is in
+# vignette("instrument-config").
 #
 # ITEMS. Every item has an ordered vector of response CATEGORIES (the codes in
 # the data file, low to high) and a vector of VALUES, the contribution of each
 # category to the raw score. Values default to 0, 1, ..., K - 1, so that
-# "categories: [1, 2, 3, 4]" reproduces the 0-3 coding of the PID-5 after
-# recoding. Non-uniform values ("values: [2, 1, 0, 1, 2]" for the PDS-ICD-11)
-# and item weights (values multiplied by a weight) are allowed. Values are
+# "categories: [1, 2, 3, 4]" gives the values 0 to 3. Non-uniform values
+# (e.g., "values: [2, 1, 0, 1, 2]" for a bipolar item scored by distance from
+# the midpoint) and item weights (values multiplied by a weight) are allowed. Values are
 # stored in integer UNITS (items$unit): with unit 0.5, the values 0, 0.5, 1
 # become 0, 1, 2 internally, so that the summed-score recursion of the item
 # models runs on integers. Reverse-keyed items have their values reversed.
 #
 # SCALES. A scale names its items and its metric: "sum" (raw score = sum of
 # the item values), "mean" (sum divided by the number of items), or
-# "mean_of_means" (mean of the means of its components, the domain rule of
-# the PID-5). The attainable raw scores follow from the item values; a
+# "mean_of_means" (mean of the means of its components, e.g., a domain
+# score as the mean of its facet scores). The attainable raw scores follow from the item values; a
 # mean_of_means scale with unequal component lengths has a dense attainable
 # set and is tabulated on a reporting grid (report_step) instead. The model
 # of a scale ("grm", "bifactor", "composite", "none") determines how the
@@ -30,8 +30,25 @@
 
 #' Read an instrument configuration
 #'
+#' Parses an instrument YAML file (or a list with the same structure), builds
+#' the item table, the reporting cells and every scale of every version
+#' (attainable scores, reporting grid, model), and fills in the defaults of
+#' the `uncertainty`, `measurement` and `transfer` blocks. The keys are
+#' documented in `vignette("instrument-config", package = "normpipe")`.
+#'
 #' @param path Path to the YAML file, or a list with the same structure.
-#' @return An object of class normpipe_instrument.
+#' @return An object of class `normpipe_instrument`: a list with `id`, `name`,
+#'   `items` (item table: `item`, `col`, `categories`, `values` in integer
+#'   units, `reverse`, `K`; attribute `unit`), `versions` (each with its
+#'   `scales`), `cells`, `measurement`, `transfer`, `uncertainty` and
+#'   `source` (normalised path of the YAML file).
+#' @seealso [scale_registry()], [get_scale()]
+#' @examples
+#' inst <- read_instrument(system.file("instruments/demo7/demo7.yml",
+#'                                     package = "normpipe"))
+#' inst
+#' scale_registry(inst)
+#' @export
 read_instrument <- function(path) {
   cfg <- if (is.character(path)) yaml::yaml.load(paste(readLines(path, encoding = "UTF-8", warn = FALSE), collapse = "\n")) else path
   stopifnot(!is.null(cfg$id), !is.null(cfg$items), !is.null(cfg$versions))
@@ -56,6 +73,10 @@ read_instrument <- function(path) {
   ), class = "normpipe_instrument")
 }
 
+#' @rdname read_instrument
+#' @param x An object of class `normpipe_instrument`.
+#' @param ... Ignored.
+#' @export
 print.normpipe_instrument <- function(x, ...) {
   cat("normpipe instrument '", x$id, "': ", x$name, "\n", sep = "")
   cat("  items: ", nrow(x$items), " (", paste(range(x$items$K), collapse = "-"),
@@ -124,13 +145,25 @@ build_cells <- function(cl) {
   )
 }
 
-#' Cell variables used by the norm tables of an instrument
+#' Reporting-cell variables of an instrument
+#'
+#' @param inst Instrument ([read_instrument()]).
+#' @return Character vector: `"gender"` when gender cells are configured,
+#'   `"age_group"` when age bands are configured (possibly empty).
+#' @export
 cell_vars <- function(inst) {
   c(if (!is.null(inst$cells$gender)) "gender",
     if (!is.null(inst$cells$age_breaks)) "age_group")
 }
 
-#' Add the age_group column of the reporting cells to a frame
+#' Add the age band of the reporting cells to a data frame
+#'
+#' @param d Data frame with a numeric column `age`.
+#' @param inst Instrument ([read_instrument()]).
+#' @return `d` with a factor column `age_group` (bands closed on the left, as
+#'   configured in `cells$age_breaks`); unchanged when the instrument has no
+#'   age bands or `d` already has `age_group`.
+#' @export
 add_age_group <- function(d, inst) {
   if (is.null(inst$cells$age_breaks)) return(d)
   if (!"age_group" %in% names(d) && "age" %in% names(d))
@@ -229,13 +262,21 @@ build_scale <- function(s, version, scales_so_far, items, report_step) {
 
 #' Attainable summed values (integer units) of a set of items
 #' @param vals list of integer value vectors, one per item
+#' @noRd
 attainable_sums <- function(vals) {
   reach <- 0L
   for (v in vals) reach <- sort(unique(as.vector(outer(reach, as.integer(v), `+`))))
   reach
 }
 
-#' All scales of an instrument as a registry tibble (one row per scale)
+#' Registry of all scales of an instrument
+#'
+#' @param inst Instrument ([read_instrument()]).
+#' @return Tibble with one row per scale: `outcome` (`<version>_<scale>`, the
+#'   name used throughout the package), `version`, `scale`, `level`, `metric`,
+#'   `model`, `n_items`, `dense` (tabulated on the reporting grid), `n_rows`
+#'   (rows of the norm table), `raw_min`, `raw_max`, `step`.
+#' @export
 scale_registry <- function(inst) {
   map_dfr(inst$versions, \(v) map_dfr(v$scales, \(s)
     tibble(outcome = paste0(v$id, "_", s$id), version = v$id, scale = s$id,
@@ -244,15 +285,33 @@ scale_registry <- function(inst) {
            raw_min = s$range[1], raw_max = s$range[2], step = s$step)))
 }
 
-#' Fetch one scale specification by outcome name (version_scale)
+#' Specification of one scale
+#'
+#' @param inst Instrument ([read_instrument()]).
+#' @param outcome Outcome name `<version>_<scale>` (see [scale_registry()]).
+#' @return List with `id`, `version`, `label`, `level`, `metric`, `model`,
+#'   `items`, `n_items`, `components`, `values`, `unit`, `sum_max`, `sums`
+#'   (attainable summed values in integer units), `grid` (raw scores of the
+#'   norm table), `step`, `dense`, `range`, `min_answered`, `observed` and
+#'   `extra` (further keys of the scale, e.g. `calibrate_from`).
+#' @export
 get_scale <- function(inst, outcome) {
   for (v in inst$versions) for (s in v$scales)
     if (paste0(v$id, "_", s$id) == outcome) return(s)
   stop("Unknown outcome '", outcome, "'.")
 }
 
-#' Which scales can be normed directly, i.e., all their items were answered by
-#' the reference sample (observed_items), and which need the transfer module
+#' Route of every scale: direct norming or transfer
+#'
+#' A scale is normed directly when the reference sample answered all of its
+#' items, otherwise it needs the transfer module. The scale key `observed`
+#' (`true`/`false`) overrides this decision.
+#'
+#' @param inst Instrument ([read_instrument()]).
+#' @param observed_items Item ids answered by the reference sample.
+#' @return [scale_registry()] with an additional column `route`
+#'   (`"direct"` or `"transfer"`).
+#' @export
 scale_routes <- function(inst, observed_items) {
   reg <- scale_registry(inst)
   reg$route <- map_chr(reg$outcome, \(o) {

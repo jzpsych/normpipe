@@ -9,13 +9,16 @@
 # models see the same ordering in every sample.
 # ==============================================================================
 
-#' Recode a data frame of item responses to category indices
+#' Recode item responses to category indices
 #'
-#' @param dat data frame with the item columns (names items$col)
-#' @param inst instrument
-#' @param items which items (ids); default all
-#' @return data frame of integer category indices (0-based), NA preserved,
-#'   columns named as in the item table
+#' @param dat Data frame with the item columns, named as in the item table
+#'   (`<prefix><item>`).
+#' @param inst Instrument ([read_instrument()]).
+#' @param items Item ids to recode; default all items of the instrument.
+#' @return Tibble of integer category indices (0-based, in the order of the
+#'   configured `categories`), `NA` preserved, columns named as in the item
+#'   table. Codes outside the configured categories are an error.
+#' @export
 item_indices <- function(dat, inst, items = inst$items$item) {
   tab <- inst$items[match(items, inst$items$item), ]
   missing_cols <- setdiff(tab$col, names(dat))
@@ -36,7 +39,15 @@ item_indices <- function(dat, inst, items = inst$items$item) {
   as_tibble(out)
 }
 
-#' Item values (integer units) from category indices
+#' Item values from category indices
+#'
+#' @param idx Category indices as returned by [item_indices()].
+#' @param inst Instrument ([read_instrument()]).
+#' @param items Item ids; default all items of the instrument.
+#' @return Tibble of item values in integer units (multiply by
+#'   `attr(inst$items, "unit")` for the configured values), reverse keying
+#'   applied.
+#' @export
 item_values <- function(idx, inst, items = inst$items$item) {
   tab <- inst$items[match(items, inst$items$item), ]
   out <- map2(tab$col, tab$values, \(cn, v) v[idx[[cn]] + 1L])
@@ -46,15 +57,23 @@ item_values <- function(idx, inst, items = inst$items$item) {
 
 #' Score every scale of every version
 #'
-#' @param dat data frame with item columns
-#' @param inst instrument
-#' @param prorate if TRUE, scales with at least min_answered of their items
-#'   answered are scored from the available items (item means, or sums scaled
-#'   up); otherwise any missing item gives NA
-#' @param partial if TRUE, item columns absent from `dat` are allowed (e.g., a
-#'   reference sample that answered only the bridge items); scales that need
-#'   an absent item are returned as NA
-#' @return tibble with one column per outcome (version_scale), raw metric
+#' @param dat Data frame with the item columns (raw response codes).
+#' @param inst Instrument ([read_instrument()]).
+#' @param prorate If `TRUE`, a scale is scored from the available items when
+#'   at least the proportion `min_answered` (scale key, default 1) of its
+#'   items is answered (item means, or sums scaled up to the full length);
+#'   otherwise any missing item gives `NA`.
+#' @param partial If `TRUE`, item columns absent from `dat` are allowed (e.g.,
+#'   a reference sample that answered only a subset of the items); scales that
+#'   need an absent item are returned as `NA`.
+#' @return Tibble with one column per outcome (`<version>_<scale>`) on the raw
+#'   metric of the scale.
+#' @examples
+#' inst <- read_instrument(system.file("instruments/demo7/demo7.yml",
+#'                                     package = "normpipe"))
+#' sim <- simulate_reference(inst, N = 50)
+#' head(score_scales(sim$items, inst))
+#' @export
 score_scales <- function(dat, inst, prorate = TRUE, partial = FALSE) {
   present <- if (partial) inst$items$item[inst$items$col %in% names(dat)] else inst$items$item
   idx <- item_indices(dat, inst, items = present)
@@ -93,6 +112,11 @@ score_one_scale <- function(vals, s, inst, prorate = TRUE) {
 #' Prorated scores and rounded published values lie between grid points; the
 #' nearest attainable score is used (ties go up). Values outside the range are
 #' clamped.
+#'
+#' @param x Numeric vector of raw scores.
+#' @param s Scale specification ([get_scale()]).
+#' @return Numeric vector of grid values (`NA` preserved).
+#' @export
 snap_to_grid <- function(x, s) {
   g <- s$grid
   i <- findInterval(x, g)
@@ -106,12 +130,14 @@ snap_to_grid <- function(x, s) {
 
 #' Summed score (integer units) of a scale from item indices, for the EAP
 #' tables (complete cases only)
+#' @noRd
 summed_values <- function(idx, s, inst) {
   vals <- item_values(idx, inst, s$items)
   rowSums(as.matrix(vals))
 }
 
 #' Raw score of a scale from its summed value (integer units)
+#' @noRd
 sum_to_raw <- function(S, s) {
   if (s$metric == "sum") S * s$unit else S * s$unit / s$n_items
 }

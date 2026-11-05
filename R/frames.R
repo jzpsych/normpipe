@@ -13,13 +13,13 @@
 #
 #   direct_frame()      observed scores of the reference sample, augmented by
 #                       the Dirichlet prior, Bayesian bootstrap over the
-#                       weights (the default route; Supplement S5.1)
+#                       weights (the default route)
 #   frequency_frame()   the same from a table of counts per score and cell,
 #                       for published or aggregated data (no item data)
 #   project_outcome()   posterior predictive draws of a transfer model
 #                       (transfer.R, optional)
 #
-# BAYESIAN BOOTSTRAP WITH A DIRICHLET PRIOR (Supplement S5.1). In every draw
+# BAYESIAN BOOTSTRAP WITH A DIRICHLET PRIOR. In every draw
 # the weight of a row is replaced by weight / shape * Gamma(shape):
 #   - an observed respondent (shape 1) gets weight x Exp(1), the weighted
 #     Bayesian bootstrap of Rubin (1981);
@@ -32,20 +32,46 @@
 #     individual input give the same posterior.
 # Summed over all rows of a cell, the result is a draw from the Dirichlet
 # posterior over the attainable scores with parameters (weighted counts +
-# prior_mass / K). The percentile of a score is the cumulative share at or
-# below it; the median over draws is the norm value, the 2.5th and 97.5th
-# percentiles the norm band.
+# prior_mass / K). The percentile rank of a score is computed in every draw
+# (norms.R, convention uncertainty$pctl_convention); the median over draws is
+# the norm value, the quantiles `probs` of the draws the norm band.
 # ==============================================================================
 
-#' Observed-score frame of the reference sample, with Dirichlet prior
+#' Draw frames: observed scores or frequency tables with a Dirichlet prior
 #'
-#' @param ref reference data: tibble with id, age, gender, weight and the
-#'   scale score in column `score` (raw metric, prorated allowed)
-#' @param s scale specification (get_scale)
-#' @param inst instrument
-#' @param n_boot number of Bayesian-bootstrap draws (0 = point frame)
-#' @param prior_mass effective pseudo-observations per cell (0 = no prior)
-#' @param seed seed; derived from the scale name when NULL
+#' A draw frame is the common input of all norm functions: a long tibble with
+#' one row per respondent (or pseudo-respondent) and draw, with columns `id`,
+#' `age`, `gender`, `weight`, `score`, `shape`, `.draw` (plus `age_group` when
+#' the instrument has age bands). Every reporting cell receives `prior_mass`
+#' pseudo-observations spread uniformly over the attainable scores (a
+#' Dirichlet prior with uniform base measure); `n_boot` Bayesian-bootstrap
+#' draws then replace each weight by `weight / shape * Gamma(shape)`. Summed
+#' over a cell, every draw is a draw from the Dirichlet posterior over the
+#' attainable scores, so frequency and individual input give the same
+#' posterior.
+#'
+#' `direct_frame()` takes the scale scores of the reference sample.
+#' `frequency_frame()` takes a table of counts per score and cell, so that
+#' published or aggregated frequency tables can be normed without raw data.
+#'
+#' @param ref Tibble with `id`, `weight`, `score` (raw metric; prorated
+#'   scores are snapped to the grid) and optionally `age` and `gender`.
+#' @param s Scale specification ([get_scale()]).
+#' @param inst Instrument ([read_instrument()]).
+#' @param n_boot Number of Bayesian-bootstrap draws; 0 gives the point frame
+#'   (one draw with the original weights).
+#' @param prior_mass Effective number of pseudo-observations per reporting
+#'   cell; 0 switches the prior off.
+#' @param seed Random seed; derived from the scale name when `NULL`.
+#' @return A draw frame (tibble, see Details).
+#' @examples
+#' inst <- read_instrument(system.file("instruments/demo7/demo7.yml",
+#'                                     package = "normpipe"))
+#' s <- get_scale(inst, "full_b")
+#' freq <- data.frame(score = 0:24, count = round(100 * dbinom(0:24, 24, 0.3)))
+#' fr <- frequency_frame(freq, s, inst, n_boot = 20)
+#' head(weighted_norms(fr, s, inst, cells = character(0)))
+#' @export
 direct_frame <- function(ref, s, inst, n_boot = 0L,
                          prior_mass = inst$uncertainty$prior_mass,
                          seed = NULL) {
@@ -63,15 +89,14 @@ direct_frame <- function(ref, s, inst, n_boot = 0L,
   bootstrap_frame(obs, n_boot, seed %||% sum(utf8ToInt(paste0("direct_", s$version, "_", s$id))))
 }
 
-#' Frame from a frequency table (no item data)
-#'
-#' @param freq tibble with columns score (raw metric), count (may be weighted
-#'   counts), and the cell variables of the instrument (gender, age_group) or
-#'   age (single years). Rows of cells not covered by the configuration enter
-#'   the overall table only.
-#' @param n_obs optional unweighted counts (defaults to count); the gamma
-#'   shape of a row, so that weighted counts keep the right amount of
-#'   uncertainty
+#' @rdname direct_frame
+#' @param freq Tibble with columns `score` (raw metric), `count` (weighted
+#'   counts allowed) and the cell variables of the instrument (`gender`,
+#'   `age_group`) or `age` (single years). An optional column `n_obs` holds
+#'   the unweighted counts (default `count`); it is the gamma shape of the
+#'   row, so that weighted counts keep the right amount of uncertainty. Rows
+#'   of cells not covered by the configuration enter the overall table only.
+#' @export
 frequency_frame <- function(freq, s, inst, n_boot = 0L,
                             prior_mass = inst$uncertainty$prior_mass,
                             seed = NULL) {
@@ -104,6 +129,7 @@ age_group_levels <- function(inst) {
 #' shape = prior_mass / K / n_ages, weight = shape x (sum of weights / Kish N)
 #' of the cell. Cells are the configured gender x age-band combinations; a
 #' frame without gender or age uses the one overall cell.
+#' @noRd
 prior_rows <- function(obs, s, inst, prior_mass) {
   K <- length(s$grid)
   vars <- intersect(cell_vars(inst), names(obs))
@@ -137,6 +163,7 @@ prior_rows <- function(obs, s, inst, prior_mass) {
 }
 
 #' Bayesian bootstrap: replicate a point frame n_boot times with gamma weights
+#' @noRd
 bootstrap_frame <- function(obs, n_boot, seed) {
   if (n_boot < 1L) return(mutate(obs, .draw = 1L))
   set.seed(seed)
@@ -147,9 +174,11 @@ bootstrap_frame <- function(obs, n_boot, seed) {
 }
 
 #' Reduce a draw frame to the point frame (draw 1 with the original weights)
+#' @noRd
 point_frame <- function(fr) filter(fr, .data$.draw == min(.data$.draw))
 
 #' Compact on-disk form of a frame (person rows once + score/weight matrices)
+#' @noRd
 frame_compact <- function(fr) {
   fr <- arrange(fr, .data$.draw, .data$id)
   draws <- sort(unique(fr$.draw))

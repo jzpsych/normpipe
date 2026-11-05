@@ -1,0 +1,167 @@
+---
+title: "Getting started with normpipe"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Getting started with normpipe}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
+```
+
+normpipe derives norm tables for a questionnaire from a weighted reference
+sample. Every norm value comes with a credible band, and every individual
+score with an interval on the T metric that accounts for measurement error
+and, optionally, for the uncertainty of the norms. This vignette walks
+through the steps with the small demo instrument that ships with the package.
+
+```{r}
+library(normpipe)
+```
+
+## 1. Describe the instrument
+
+An instrument is described by a YAML file: items and their response format,
+versions with their scales, reporting cells and a few settings. The demo
+instrument has eight items on a seven-point format, two reverse-keyed items,
+and a full and a short form.
+
+```{r}
+path <- system.file("instruments/demo7/demo7.yml", package = "normpipe")
+inst <- read_instrument(path)
+inst
+```
+
+`scale_registry()` lists every scale. Its `outcome` (`<version>_<scale>`) is
+the name used everywhere in the package.
+
+```{r}
+scale_registry(inst)
+```
+
+All keys of the configuration file are documented in
+`vignette("instrument-config")`.
+
+## 2. Reference sample
+
+The reference sample is a list with two data frames: `meta` (`id`, `age`,
+`gender`, optionally `weight`) and `items` (the item columns, named
+`<prefix><item>`, with the raw response codes). Here it is simulated.
+
+```{r}
+sim <- simulate_reference(inst, N = 1500, seed = 2)
+head(sim$meta)
+head(sim$items)
+```
+
+`score_scales()` scores every scale of every version, applying reverse
+keying and the scoring rule of each scale.
+
+```{r}
+scores <- score_scales(sim$items, inst)
+summary(scores$full_b)
+```
+
+Design weights can be raked to population margins of the reporting cells
+with `make_margins()` and `rake_to_margins()`; `run_norming()` does this
+when `margins` is given.
+
+## 3. Norms with norm bands
+
+The norm functions work on a *draw frame*: the scores of the reference
+sample, augmented by `prior_mass` pseudo-observations per reporting cell
+(a Dirichlet prior over the attainable scores), and replicated over
+Bayesian-bootstrap draws of the weights.
+
+```{r}
+s <- get_scale(inst, "full_b")
+ref <- dplyr::bind_cols(sim$meta, score = scores$full_b)
+fr <- direct_frame(ref, s, inst, n_boot = 50)
+nm <- weighted_norms(fr, s, inst, cells = character(0))
+head(nm[, c("raw", "pctl_med", "pctl_lo", "pctl_hi", "T", "T_lo", "T_hi")])
+```
+
+`pctl_med` is the percentile rank (median over draws), `pctl_lo` and
+`pctl_hi` its band; `T`, `T_lo` and `T_hi` the same on the T metric,
+T = 50 + 10 Φ⁻¹(PR). By default the percentile rank is the midpoint rank
+PR = P(X < x) + ½ P(X = x); set `uncertainty: pctl_convention: cumulative`
+in the configuration for PR = P(X ≤ x).
+
+`norms_all_cells()` gives the tables for all configured reporting cells
+(here gender × age band) plus the overall table, and
+`weighted_norms_continuous()` gives kernel-smoothed norms for every year of
+age.
+
+### Frequency tables
+
+When only a frequency table is available, `frequency_frame()` builds the
+same draw frame from counts per score (and per cell, if the table has
+`gender` and `age_group` or `age` columns).
+
+```{r}
+freq <- dplyr::count(ref, score, name = "count")
+fr_freq <- frequency_frame(freq, s, inst, n_boot = 50)
+nm_freq <- weighted_norms(fr_freq, s, inst, cells = character(0))
+```
+
+For the same weighted counts, frequency and individual input give identical point norms (`n_boot = 0`) and the same posterior of the norm values.
+
+## 4. Individual intervals
+
+Stage `M1` calibrates an item response model for every scale with
+`model: grm` or `model: bifactor` (`fit_scale_model()`, with mirt when it is
+installed). From the calibrated model, `conditional_tables()` gives for
+every summed score the posterior of the person's trait, mapped onto the T
+metric of the reporting cell (score-conditional interval), and
+`integrated_intervals()` repeats this under draws of the item parameters and
+of the norm values (integrated interval).
+
+## 5. The whole pipeline
+
+`run_norming()` runs all stages and writes the results to a folder. With the
+built-in estimator this takes several minutes for the demo instrument; with
+mirt it is considerably faster.
+
+```{r, eval = FALSE}
+res <- run_norming(inst, ref = list(meta = sim$meta, items = sim$items),
+                   out_dir = "demo-out",
+                   stages = c("P0", "M1", "M3a", "M3b", "M3c", "M3d", "X1"))
+```
+
+The main result is `demo-out/norm_tables_long.csv`, one row per version,
+scale, reporting cell and raw score. An example of this table for the demo
+instrument is installed with the package:
+
+```{r}
+long <- read.csv(system.file("examples/norm_tables_long.csv", package = "normpipe"))
+head(long[long$scale == "b" & long$cell == "overall",
+          c("raw", "T", "T_lo", "T_hi", "T_cond_lo", "T_cond_hi", "T_int_lo", "T_int_hi")])
+```
+
+`T_lo`/`T_hi` is the norm band of the T value, `T_cond_lo`/`T_cond_hi` the
+score-conditional interval and `T_int_lo`/`T_int_hi` the integrated interval
+of a person with that raw score.
+
+Stages are cached per scale: rerunning `run_norming()` with the same
+`out_dir` skips everything that already exists.
+
+## 6. Scales the reference sample did not answer
+
+If the reference sample answered only some items, scales whose items are
+all present are normed directly; the others need the transfer module
+(stage `M2`). It is configured in the `transfer` block of the instrument and
+needs donor samples that answered the full instrument:
+
+```{r, eval = FALSE}
+inst <- read_instrument(system.file("instruments/demo7/demo7_transfer.yml",
+                                    package = "normpipe"))
+inst$donors_data <- list(meta = donor_meta, items = donor_items)  # meta$sample
+run_norming(inst, ref = list(meta = ref_meta, items = ref_bridge_items),
+            out_dir = "transfer-out", stages = c("P0", "M2", "M3a", "X1"))
+```
+
+The transfer models are Bayesian distributional regressions fitted with brms
+(backend cmdstanr when installed, otherwise rstan). `scripts/smoke_transfer.R`
+in the source repository runs this example end to end on simulated data.

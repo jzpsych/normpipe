@@ -1,5 +1,5 @@
 # ==============================================================================
-# weights.R -- calibration of survey weights by raking (Supplement S5.1)
+# weights.R -- calibration of survey weights by raking
 #
 # The reference sample may carry design weights; they can be raked to
 # population margins of the reporting-cell variables (age band x gender)
@@ -9,9 +9,19 @@
 # trim_quantile and renormalized to the net sample size.
 # ==============================================================================
 
-#' Aggregate single-year population counts to the configured cells
+#' Population margins and raking of survey weights
 #'
-#' @param pop tibble with age (single years), gender, Freq
+#' `make_margins()` aggregates single-year population counts to the
+#' reporting cells of an instrument. `rake_to_margins()` rakes the design
+#' weights of the reference sample to these margins with [survey::rake()],
+#' trims them at `trim_quantile` and rescales them to the net sample size.
+#' [run_norming()] calls it when `margins` is given.
+#'
+#' @param pop Tibble with `age` (single years), `gender` and `Freq`
+#'   (population counts).
+#' @param inst Instrument ([read_instrument()]).
+#' @return `make_margins()`: data frame with the cell variables and `Freq`.
+#' @export
 make_margins <- function(pop, inst) {
   vars <- cell_vars(inst)
   d <- add_age_group(pop, inst)
@@ -21,10 +31,15 @@ make_margins <- function(pop, inst) {
     as.data.frame()
 }
 
-#' Rake design weights to the population margins of the reporting cells
-#'
-#' @param meta tibble with id, age, gender, weight (design weight; 1 if none)
-#' @return meta with column weight_raked and attribute "diagnostics"
+#' @rdname make_margins
+#' @param meta Tibble with `id`, `age`, `gender`, `weight` (design weight; 1
+#'   if none).
+#' @param margins Output of `make_margins()`.
+#' @param trim_quantile Raked weights are trimmed at this quantile.
+#' @return `rake_to_margins()`: `meta` (rows with complete cell variables)
+#'   with column `weight_raked` and attribute `"diagnostics"` (Kish effective
+#'   N before and after raking, ratio of largest to smallest weight).
+#' @export
 rake_to_margins <- function(meta, margins, inst, trim_quantile = 0.99) {
   vars <- cell_vars(inst)
   d <- add_age_group(meta, inst) %>% filter(!is.na(.data$weight))

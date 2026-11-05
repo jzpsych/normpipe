@@ -10,3 +10,5 @@ out/
 data-raw/private/
 *.sav
 *.rds
+doc/
+Meta/

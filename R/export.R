@@ -6,14 +6,41 @@
 #                        conditional interval (T_cond_lo/hi), integrated
 #                        interval (T_int_lo/hi), extrapolation flag
 # norm_tables_age_continuous.csv   continuous-age norms (kernel), per year
-# platform/norms_<version>.csv     the reduced tables of the scoring platform
-# portal/<instrument>.json         the norm file of the instrument portal
+# platform/norms_<version>.csv     compact per-version tables for scoring software
+# portal/<instrument>.json         norm file in the JSON format of a web portal
 # ==============================================================================
 
-#' Assemble the long table of one scale
+#' Export formats
 #'
-#' @param nm norms_all_cells() result, cond conditional_tables() result (or
-#'   NULL), intg integrated_intervals() result (or NULL)
+#' `long_table_scale()` assembles the long norm table of one scale: one row
+#' per reporting cell and raw score with percentile rank, T, norm band,
+#' score-conditional and integrated interval (interpolated to every raw
+#' score) and an extrapolation flag (median percentile rank below 0.5 % or
+#' above 99.5 %). [run_norming()] binds these tables to
+#' `norm_tables_long.csv`.
+#'
+#' `export_platform_tables()` writes compact per-version tables for scoring
+#' software: `norms_<version>.csv` (raw score, T, integrated interval,
+#' percentile rank, extrapolation flag; cells `gender`/`age_group`, `"all"`
+#' for the overall table) and, with continuous-age norms,
+#' `norms_<version>_age.rds`.
+#'
+#' `export_portal_json()` writes one JSON norm file per instrument for a web
+#' portal: one source per version, the reporting cells as groups, and per row
+#' raw score, cell, T and interval limits. The keys and the default labels
+#' of this format are German (e.g. `quellen`, `gruppen`, `zeilen`).
+#'
+#' @param nm Band norms of the scale ([norms_all_cells()]).
+#' @param cond Score-conditional tables ([conditional_tables()]) or `NULL`.
+#' @param intg Integrated intervals ([integrated_intervals()]) or `NULL`.
+#' @param s Scale specification ([get_scale()]).
+#' @param inst Instrument ([read_instrument()]).
+#' @param route Route of the scale, written into the table.
+#' @return `long_table_scale()`: tibble with `version`, `scale`, `level`,
+#'   `route`, `cell`, the cell variables, `raw`, `pctl_med`, `pctl_lo`,
+#'   `pctl_hi`, `T`, `T_lo`, `T_hi`, `T_cond_lo`, `T_cond_hi`, `T_int_lo`,
+#'   `T_int_hi`, `extrapolation`, `n_eff`.
+#' @export
 long_table_scale <- function(nm, cond, intg, s, inst, route = "direct") {
   cv <- cell_vars(inst)
   rows <- list()
@@ -46,8 +73,14 @@ long_table_scale <- function(nm, cond, intg, s, inst, route = "direct") {
                           "extrapolation", "n_eff")))
 }
 
-#' Platform tables: one csv per version with the columns the scoring
-#' platform reads (T, integrated interval, percentile, extrapolation)
+#' @rdname long_table_scale
+#' @param long Long norm table (rows of `long_table_scale()`).
+#' @param cont Continuous-age norms ([weighted_norms_continuous()] with
+#'   `version`, `scale`, `level`) or `NULL`.
+#' @param dir Output folder.
+#' @return `export_platform_tables()`: paths of the written files
+#'   (invisibly).
+#' @export
 export_platform_tables <- function(long, cont, dir) {
   dir.create(dir, showWarnings = FALSE, recursive = TRUE)
   band <- long %>%
@@ -76,8 +109,14 @@ export_platform_tables <- function(long, cont, dir) {
   invisible(list.files(dir, full.names = TRUE))
 }
 
-#' Norm file of the instrument portal (daten/normen/<id>.json): one source
-#' per version with the cells as groups and the integrated interval per row
+#' @rdname long_table_scale
+#' @param file Output file.
+#' @param citation Citation string of the norms.
+#' @param title Title prefix of every source (followed by the version label).
+#' @param interval Interval written per row: `"integrated"`, `"conditional"`
+#'   or `"band"`.
+#' @return `export_portal_json()`: `file` (invisibly).
+#' @export
 export_portal_json <- function(long, inst, file, citation = "", title = "Bayesianische Normen",
                                interval = c("integrated", "conditional", "band")) {
   if (!requireNamespace("jsonlite", quietly = TRUE)) stop("jsonlite is not installed.")
@@ -111,9 +150,9 @@ export_portal_json <- function(long, inst, file, citation = "", title = "Bayesia
          zitation = citation, kennwert = "T", dezimalen_kennwert = 1,
          intervall = list(art = "grenzen", niveau = 95,
                           erklaerung = switch(interval,
-                            integrated = "95-%-Intervall für den wahren T-Wert der Person, einschließlich der Unsicherheit der Normwerte",
-                            conditional = "95-%-Intervall für den wahren T-Wert der Person bei festen Normwerten",
-                            band = "95-%-Glaubwürdigkeitsband des Normwerts")),
+                            integrated = "95-%-Intervall f\u00fcr den wahren T-Wert der Person, einschlie\u00dflich der Unsicherheit der Normwerte",
+                            conditional = "95-%-Intervall f\u00fcr den wahren T-Wert der Person bei festen Normwerten",
+                            band = "95-%-Glaubw\u00fcrdigkeitsband des Normwerts")),
          skalen = unname(scales))
   })
   out <- list(instrument = inst$id, erzeugt = format(Sys.time(), "%Y-%m-%d"),

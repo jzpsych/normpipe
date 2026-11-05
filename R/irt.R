@@ -1,6 +1,6 @@
 # ==============================================================================
 # irt.R -- item models, calibration, parameter draws, expected-score curves,
-#          summed-score EAP (Supplement S3.3, S5.2, S5.3)
+#          summed-score EAP
 #
 # The item models are stored in a plain representation that does not depend
 # on mirt: a slope matrix a (items x factors), a list of intercept vectors d
@@ -21,7 +21,7 @@
 #             true score of the reported composite (omega-total logic)
 #   composite several unidimensional component models coupled by a
 #             second-order structure theta_b = lambda_b g + sqrt(1 - lambda_b^2)
-#             u_b (total scores; Supplement S5.3)
+#             u_b (total scores)
 # ==============================================================================
 
 # --- Graded response model ----------------------------------------------------
@@ -30,6 +30,7 @@
 #' @param a slope vector (length nfact), d intercepts (length K - 1, decreasing)
 #' @param Theta G x nfact matrix
 #' @return G x K matrix
+#' @noRd
 grm_probs <- function(a, d, Theta) {
   z <- as.vector(Theta %*% a)
   Pstar <- cbind(1, sapply(d, \(dk) plogis(z + dk)), 0)
@@ -39,6 +40,7 @@ grm_probs <- function(a, d, Theta) {
 }
 
 #' Category probabilities of item i of a model (G x K_i)
+#' @noRd
 item_probs <- function(model, i, Theta) {
   if (ncol(Theta) < ncol(model$a)) {
     Th <- matrix(0, nrow(Theta), ncol(model$a)); Th[, seq_len(ncol(Theta))] <- Theta
@@ -48,6 +50,7 @@ item_probs <- function(model, i, Theta) {
 }
 
 #' Build a model object from its parts
+#' @noRd
 new_scale_model <- function(type, items, K, values, a, d, spec = NULL,
                             par_table = NULL, vcov = NULL, constrain = list(),
                             engine = "manual", info = list()) {
@@ -62,6 +65,10 @@ new_scale_model <- function(type, items, K, values, a, d, spec = NULL,
             class = "normpipe_model")
 }
 
+#' @rdname fit_scale_model
+#' @param x An object of class `normpipe_model`.
+#' @param ... Ignored.
+#' @export
 print.normpipe_model <- function(x, ...) {
   cat("normpipe item model (", x$type, ", ", x$n_items, " items, ",
       ncol(x$a), " factor(s), engine ", x$engine, ")\n", sep = "")
@@ -70,6 +77,7 @@ print.normpipe_model <- function(x, ...) {
 
 #' Parameter table of a model (one row per parameter, mirt layout)
 #' columns: parnum, item (index), name (a1.., d1..), value, est
+#' @noRd
 model_par_table <- function(a, d, est = NULL) {
   rows <- list(); pn <- 0L
   for (i in seq_len(nrow(a))) {
@@ -90,6 +98,7 @@ model_par_table <- function(a, d, est = NULL) {
 }
 
 #' Rebuild a and d from a parameter table
+#' @noRd
 apply_par_table <- function(model, tab) {
   a <- model$a; d <- model$d
   for (i in seq_len(model$n_items)) {
@@ -107,14 +116,38 @@ apply_par_table <- function(model, tab) {
 
 #' Calibrate the item model of a scale
 #'
-#' @param idx data frame of category indices (0-based) for the scale's items,
-#'   columns in model order (item_indices on the calibration sample)
-#' @param s scale specification
-#' @param inst instrument
-#' @param engine "mirt" (default when installed; required for bifactor),
-#'   "internal" (unidimensional GRM by penalized marginal ML, no dependency)
-#' @param subset for short forms scored from a longer calibration: the item
-#'   positions actually calibrated (NULL = all items of s)
+#' Fits a graded response model (`model: grm`) or a bifactor graded response
+#' model with one specific factor per component (`model: bifactor`) to the
+#' calibration data of a scale. The models run on value-ordered categories,
+#' so reverse-keyed items keep a positive slope. Every configured category
+#' must occur in the data; collapse empty categories in the item
+#' configuration first.
+#'
+#' With `engine = "mirt"` the model is fitted with [mirt::mirt()] or
+#' [mirt::bfactor()] and the Oakes information matrix. When that matrix
+#' cannot be inverted, the model is refitted with `TOL = 1e-5` and, if
+#' necessary, with the cross-product information; without any usable matrix
+#' the parameter draws fall back to the point estimates (with a warning).
+#' Weakly identified bifactor models (e.g., two-item specific factors) can
+#' end without EM convergence; check `model$info$converged`. The internal
+#' engine fits the same models by penalised marginal maximum likelihood
+#' (Gauss-Hermite quadrature, weak normal penalties on log slopes and
+#' intercepts); it needs no further package but is slow for long scales.
+#'
+#' @param idx Data frame of category indices (0-based, [item_indices()]) of
+#'   the calibration sample, with the item columns of the scale.
+#' @param s Scale specification ([get_scale()]).
+#' @param inst Instrument ([read_instrument()]).
+#' @param engine `"auto"` (mirt when installed, otherwise internal),
+#'   `"mirt"` or `"internal"`; default `measurement$engine` of the instrument.
+#' @param ncycles Maximum number of EM cycles (mirt).
+#' @param constrain_blocks Equal specific slopes within every block of a
+#'   bifactor model; default the scale key `equal_block_slopes`.
+#' @return An object of class `normpipe_model`: `type`, `items`, `K`,
+#'   `values`, slope matrix `a`, intercept list `d` (mirt parameterisation,
+#'   P(X >= k | theta) = logistic(a'theta + d_k)), `spec`, `blocks`,
+#'   `par_table`, `vcov`, `constrain`, `engine`, `info`, `scale`.
+#' @export
 fit_scale_model <- function(idx, s, inst, engine = inst$measurement$engine %||% "auto",
                             ncycles = 2000, constrain_blocks = NULL) {
   stopifnot(s$model %in% c("grm", "bifactor"))
@@ -134,8 +167,8 @@ fit_scale_model <- function(idx, s, inst, engine = inst$measurement$engine %||% 
   spec <- if (s$model == "bifactor") rep(seq_along(s$components), lengths(s$components))
   # the item models run on VALUE-ORDERED categories: model category c of item
   # j is data index ord[[j]][c] - 1, and the model's values are increasing, so
-  # reverse-keyed items keep a positive slope (as after reversing the item in
-  # the original PID-5 pipeline); nothing downstream needs the data indices
+  # reverse-keyed items keep a positive slope; nothing downstream needs the
+  # data indices
   ord <- map(tab$values, order)
   for (j in seq_along(items)) dat[[j]] <- match(dat[[j]] + 1L, ord[[j]]) - 1L
   values <- map2(tab$values, ord, \(v, o) v[o])
@@ -177,12 +210,11 @@ fit_with_mirt <- function(dat, K, values, spec, ncycles, constrain_blocks = FALS
     if (!is.null(V) && (nrow(V) < 2 || anyNA(V))) NULL else V
   }
   # Oakes information (mirt's default) at the default EM tolerance first.
-  # When it cannot be inverted, the EM solution usually sits slightly off the
-  # optimum (seen for a weakly identified bifactor model, where the slopes
-  # still moved with a tighter tolerance): refit with TOL = 1e-5, which costs
-  # time but gives the maximum-likelihood solution and a proper information
-  # matrix. The cross-product information is the last resort; its standard
-  # errors are much larger than the Oakes ones in such cases.
+  # When it cannot be inverted, the EM solution typically sits slightly off
+  # the optimum (weakly identified models): refit with TOL = 1e-5, which costs
+  # time but brings the solution closer to the maximum and usually gives a
+  # proper information matrix. The cross-product information is the last
+  # resort; its standard errors tend to be much larger than the Oakes ones.
   quiet <- function(expr) withCallingHandlers(expr,
     warning = \(w) if (grepl("invert information matrix", conditionMessage(w)))
       invokeRestart("muffleWarning"))
@@ -231,6 +263,7 @@ fit_with_mirt <- function(dat, K, values, spec, ncycles, constrain_blocks = FALS
 #' per-person scores (OPG) for larger ones, transformed to the (a, d) scale
 #' by the delta method. Slow for long scales: intended for tests and for
 #' short instruments, mirt is the production engine.
+#' @noRd
 fit_grm_internal <- function(dat, K, values, spec = NULL, gh_points = NULL,
                              gh_points_u = 9, penalty = c(a = 1.5, d = 5),
                              constrain_blocks = FALSE, maxit = 300) {
@@ -347,7 +380,7 @@ fit_grm_internal <- function(dat, K, values, spec = NULL, gh_points = NULL,
                               parvec = to_ad(opt$par)))
 }
 
-# --- Parameter draws (Supplement S5.4) -----------------------------------------
+# --- Parameter draws -------------------------------------------------------------
 
 #' Draw item-parameter sets from the asymptotic distribution of a model
 #'
@@ -356,6 +389,13 @@ fit_grm_internal <- function(dat, K, values, spec = NULL, gh_points = NULL,
 #' are rejected and redrawn. Equality constraints (mirt) are honoured by
 #' drawing the first member of a group and copying it. Without a usable
 #' covariance matrix the point estimates are returned for every draw.
+#'
+#' @param model An object of class `normpipe_model` ([fit_scale_model()]).
+#' @param n_draws Number of parameter draws.
+#' @param max_tries Maximum number of redraws per draw before the point
+#'   estimates are used.
+#' @return List of `n_draws` models of class `normpipe_model`.
+#' @export
 draw_model_params <- function(model, n_draws, max_tries = 50) {
   tab <- model$par_table; V <- model$vcov
   if (is.null(tab) || is.null(V)) return(rep(list(model), n_draws))
@@ -427,11 +467,24 @@ block_weights <- function(s, n_per_block) {
     mean_of_means = 1 / (n_per_block * length(n_per_block)))
 }
 
-#' Block list of a scale given its model(s)
-#' @param models for grm/bifactor one model; for composite a named list of
-#'   component models (names = component ids) and `lambda` the loadings
-#' @param subset for grm/bifactor: positions (within the model) of the items
-#'   actually scored (short forms calibrated on the long form); NULL = all
+#' Block list of a scale given its item model(s)
+#'
+#' A block list describes how the items of a scale are grouped and how the
+#' latent variables of a block depend on the general trait: one block for a
+#' GRM scale, one block per specific factor for a bifactor scale, one block
+#' per component model for a composite scale. It is the input of
+#' [conditional_tables()] and [integrated_intervals()].
+#'
+#' @param s Scale specification ([get_scale()]).
+#' @param models For `grm`/`bifactor` scales one `normpipe_model`; for
+#'   `composite` scales a named list of component models (names = component
+#'   ids).
+#' @param subset For `grm`/`bifactor`: positions (within the model) of the
+#'   items actually scored, e.g. a short form scored with the item parameters
+#'   of the long form; `NULL` = all items.
+#' @param lambda For `composite`: second-order loadings of the components.
+#' @return List of blocks (`model`, `pos`, `theta_fun`, `bw`).
+#' @export
 make_blocks <- function(s, models, subset = NULL, lambda = NULL) {
   if (s$model == "composite") {
     stopifnot(!is.null(lambda), setequal(names(models), names(s$components)))
@@ -468,6 +521,7 @@ make_blocks <- function(s, models, subset = NULL, lambda = NULL) {
 #' Lord-Wingersky recursion over integer item values
 #' @param P list of G x K_i probability matrices, vals list of value vectors
 #' @return G x (Smax + 1) likelihood matrix L(S | theta), S = 0..Smax
+#' @noRd
 lw_recursion <- function(P, vals) {
   Smax <- sum(map_int(vals, max))
   G <- nrow(P[[1]])
@@ -487,6 +541,7 @@ lw_recursion <- function(P, vals) {
 
 #' Prepare one block: per node q the likelihood L_q(S_b | g) and the expected
 #' block sum tau_b(g, q), on the g grid
+#' @noRd
 block_prep <- function(bl, grid, gh) {
   G <- length(grid); Q <- length(gh$nodes)
   m <- bl$model
@@ -509,6 +564,7 @@ block_prep <- function(bl, grid, gh) {
 #'
 #' @return list(theta = grid, mean_score = expected raw score), the format
 #'   consumed by score_dist_to_theta_prior() and make_Tmap()
+#' @noRd
 expected_score_curve <- function(blocks, s, grid = seq(-6, 6, length.out = 241),
                                  gh_points = 21, prep = NULL) {
   gh <- statmod::gauss.quad.prob(gh_points, "normal")
@@ -517,12 +573,12 @@ expected_score_curve <- function(blocks, s, grid = seq(-6, 6, length.out = 241),
   list(theta = grid, mean_score = ms)
 }
 
-#' Summed-score EAP table (Supplement S5.2)
+#' Summed-score EAP table
 #'
 #' Exact for one block without block deviation (unidimensional GRM: posterior
 #' of g per summed score); Monte Carlo over the block deviations otherwise
 #' (bifactor and composite: the composite true score is sampled exactly given
-#' the total summed score, as in the original eapsum_bifactor_table).
+#' the total summed score).
 #'
 #' @param blocks block list (make_blocks)
 #' @param s scale
@@ -532,6 +588,7 @@ expected_score_curve <- function(blocks, s, grid = seq(-6, 6, length.out = 241),
 #' @return tibble sum_score, raw, theta_eap, theta_lo, theta_hi, tau_eap,
 #'   tau_sd, p_marg; with return_posterior = TRUE a list with the posterior
 #'   over the g grid per summed score (for the integrated intervals)
+#' @noRd
 eapsum_table <- function(blocks, s, prior_theta, prior_w, sum_scores = NULL,
                          gh_points = 21, probs = c(.025, .975), n_mc = 1500,
                          return_posterior = FALSE, prep = NULL) {
@@ -628,15 +685,17 @@ eapsum_table <- function(blocks, s, prior_theta, prior_w, sum_scores = NULL,
 
 #' Summed scores at which a long scale is tabulated: all attainable sums when
 #' there are at most max_rows, otherwise about max_rows evenly spaced ones
+#' @noRd
 eap_sum_rows <- function(s, max_rows = 61) {
   if (length(s$sums) <= max_rows) return(s$sums)
   s$sums[unique(round(seq(1, length(s$sums), length.out = max_rows)))]
 }
 
-# --- Composite route: second-order loadings (Supplement S5.3) -----------------
+# --- Composite route: second-order loadings -----------------------------------
 
 #' Model-implied reliability of a block's summed value in the calibration
 #' population (theta ~ N(0, 1))
+#' @noRd
 block_sum_reliability <- function(model, pos = NULL, gh_points = 41) {
   gh <- statmod::gauss.quad.prob(gh_points, "normal")
   pos <- pos %||% seq_len(model$n_items)
@@ -655,6 +714,7 @@ block_sum_reliability <- function(model, pos = NULL, gh_points = 41) {
 #' Second-order loadings of the component traits of a composite scale,
 #' estimated from the component summed values in the calibration data
 #' (disattenuated correlations, principal-axis iteration)
+#' @noRd
 total_loadings <- function(idx, s, inst, models, n_iter = 50) {
   sums <- map_dfc(set_names(names(s$components)), \(cp) {
     v <- item_values(idx, inst, s$components[[cp]])

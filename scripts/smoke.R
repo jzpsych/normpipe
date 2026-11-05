@@ -1,5 +1,5 @@
 suppressPackageStartupMessages(library(normpipe))
-inst <- read_instrument("normpipe/inst/instruments/demo7/demo7.yml")
+inst <- read_instrument(system.file("instruments/demo7/demo7.yml", package = "normpipe"))
 print(inst)
 print(scale_registry(inst))
 s <- get_scale(inst, "full_ab"); cat("ab grid:", length(s$grid), "dense", s$dense, "range", s$range, "step", s$step, "\n")

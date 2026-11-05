@@ -7,7 +7,24 @@
 #' One trait per version-"full" facet-level scale is drawn from a correlated
 #' normal (shared general factor), items follow a GRM with random slopes and
 #' thresholds on the configured categories; age and gender shift the traits.
-#' Returns list(meta, items, theta, params).
+#' Intended for tests, examples and simulation checks.
+#'
+#' @param inst Instrument ([read_instrument()]).
+#' @param N Number of respondents.
+#' @param seed Random seed.
+#' @param general Loading of every trait on the shared general factor.
+#' @param age_effect Linear age effect on the traits (per year, centred at 50).
+#' @param gender_effect Shift of every second trait for `gender == "f"`.
+#' @return List with `meta` (`id`, `age`, `gender`, `weight`), `items` (data
+#'   frame of response codes, columns named as in the item table), `theta`
+#'   (true traits), `trait` (trait index per item) and `params` (true slopes
+#'   and intercepts).
+#' @examples
+#' inst <- read_instrument(system.file("instruments/demo7/demo7.yml",
+#'                                     package = "normpipe"))
+#' sim <- simulate_reference(inst, N = 200)
+#' str(sim$meta)
+#' @export
 simulate_reference <- function(inst, N = 2000, seed = 1, general = 0.6,
                                age_effect = 0.01, gender_effect = 0.3) {
   set.seed(seed)

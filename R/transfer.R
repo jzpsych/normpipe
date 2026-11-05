@@ -1,5 +1,5 @@
 # ==============================================================================
-# transfer.R -- optional Module 2: conditional transfer models (Supplement S4)
+# transfer.R -- optional stage M2: conditional transfer models
 #
 # Needed only for scales whose items the reference sample did not answer. A
 # BRIDGE (items answered by the reference sample and by one or more donor
@@ -12,19 +12,40 @@
 #
 # Configuration (instrument$transfer):
 #   enabled: true
-#   bridge:                 # bridge predictors: named item sets (facet scores)
-#     - {id: emo_lability, items: [62, 122]}
+#   bridge:                 # bridge predictors: named item sets
+#     - {id: a2, items: [1, 2]}
 #     ...
-#   reference_level: respondi    # donor sample used as the reference level
+#   reference_level: quota       # donor sample used as the reference level
 #   n_draws: 500                 # posterior predictive draws per respondent
 #   adapt_delta: 0.95
-#   backend: cmdstanr | rstan   (default: cmdstanr when installed, as in the
-#                                original pipeline, otherwise rstan)
-# Donor samples are passed to run_norming() as inst$donors loaders or as the
-# `donors` argument (list(meta, items) with meta$sample).
+#   backend: cmdstanr | rstan    # default: cmdstanr when installed, else rstan
+# Donor samples are attached to the instrument before run_norming() as
+# inst$donors_data <- list(meta, items), with meta$sample naming the sample.
 # ==============================================================================
 
-#' Bridge scores (one column per bridge predictor, plus br_mean)
+#' Transfer module: bridge scores, transfer models and projection
+#'
+#' The transfer module is needed only for scales whose items the reference
+#' sample did not answer. A bridge (items answered by the reference sample
+#' and by one or more donor samples that answered the full instrument)
+#' predicts every such scale score through a Bayesian distributional
+#' regression fitted with brms: the bridge scores, `s(age)`, `gender` and
+#' `sample` predict the score with an interval-censored normal likelihood,
+#' and `sigma` depends on the mean bridge score and `s(age)`. The posterior
+#' predictive draws for every reference respondent, snapped to the attainable
+#' scores, form the draw frame of the scale. [run_norming()] runs these steps
+#' in stage `M2`; the donor samples are supplied as
+#' `inst$donors_data <- list(meta, items)` with a column `meta$sample`.
+#'
+#' The Stan backend is `transfer$backend` of the instrument, by default
+#' cmdstanr when installed and rstan otherwise. cmdstanr needs an installed
+#' CmdStan (`cmdstanr::install_cmdstan()`).
+#'
+#' @param items_df Data frame with the bridge item columns.
+#' @param inst Instrument ([read_instrument()]) with a `transfer` block.
+#' @return `bridge_scores()`: tibble with one column `br_<id>` per bridge
+#'   predictor (mean item value) and `br_mean` (mean over all bridge items).
+#' @export
 bridge_scores <- function(items_df, inst) {
   br <- inst$transfer$bridge
   stopifnot(!is.null(br))
@@ -40,10 +61,18 @@ bridge_scores <- function(items_df, inst) {
   out
 }
 
-#' Fit the transfer model of one outcome on the donor frame
-#'
-#' @param dat donor frame with the outcome column, bridge columns, age,
-#'   gender, sample (factor; first level = reference level)
+#' @rdname bridge_scores
+#' @param outcome Outcome name (`<version>_<scale>`), a column of `dat`.
+#' @param dat Donor frame with the outcome column, the bridge columns
+#'   (`bridge_scores()`), `age`, `gender` and `sample` (factor; first level =
+#'   reference level).
+#' @param s Scale specification ([get_scale()]).
+#' @param exclude Bridge ids to leave out of the predictors (e.g. the bridge
+#'   items of the outcome itself).
+#' @param adapt_delta,max_treedepth Sampler settings passed to brms.
+#' @param file Optional file path for caching the brms fit.
+#' @return `fit_transfer()`: a `brmsfit`.
+#' @export
 fit_transfer <- function(outcome, dat, s, inst, exclude = NULL,
                          adapt_delta = inst$transfer$adapt_delta %||% 0.95,
                          max_treedepth = 10, file = NULL) {
@@ -74,8 +103,14 @@ fit_transfer <- function(outcome, dat, s, inst, exclude = NULL,
             file = file)
 }
 
-#' Posterior predictive draws for the reference sample, discretized to the
-#' attainable scores of the outcome
+#' @rdname bridge_scores
+#' @param fit Transfer model (`fit_transfer()`).
+#' @param pred_frame Prediction frame of the reference sample: `id`, `age`,
+#'   `gender`, `weight`, the bridge columns and `sample` (set to the
+#'   reference level).
+#' @param n_draws Number of posterior predictive draws per respondent.
+#' @return `project_outcome()`: draw frame (see [direct_frame()]).
+#' @export
 project_outcome <- function(fit, pred_frame, s, n_draws = 500) {
   if (!requireNamespace("brms", quietly = TRUE)) stop("brms is not installed.")
   pp <- brms::posterior_predict(fit, newdata = pred_frame, ndraws = n_draws)  # draws x persons
@@ -90,6 +125,7 @@ project_outcome <- function(fit, pred_frame, s, n_draws = 500) {
 }
 
 #' Draw frame of a transfer outcome from the cached fit (used by run_norming)
+#' @noRd
 project_frame <- function(o, s, inst, out_dir) {
   fit <- readRDS(file.path(out_dir, paste0("transfer_", o, ".rds")))
   pred <- readRDS(file.path(out_dir, "m2_prediction_frame.rds"))
@@ -98,6 +134,7 @@ project_frame <- function(o, s, inst, out_dir) {
 }
 
 #' Stage M2 of run_norming(): donor frame, transfer fits, prediction frame
+#' @noRd
 run_transfer_stage <- function(inst, reg, ref, ref_scores, out_dir, say = message) {
   donors <- inst$donors_data
   if (is.null(donors)) stop("Transfer is enabled but no donor samples were supplied ",

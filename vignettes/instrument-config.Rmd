@@ -1,0 +1,175 @@
+---
+title: "The instrument configuration file"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{The instrument configuration file}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
+```
+
+Everything that is specific to an instrument is described in one YAML file,
+read with `read_instrument()`. This vignette lists every key. Defaults are
+given in brackets; keys without a default are required.
+
+A complete small example is `inst/instruments/demo7/demo7.yml`:
+
+```{r, echo = FALSE, comment = ""}
+cat(readLines(system.file("instruments/demo7/demo7.yml", package = "normpipe")), sep = "\n")
+```
+
+## Top level
+
+| Key | Meaning |
+|---|---|
+| `id` | short identifier of the instrument, used in file names |
+| `name` | display name [`id`] |
+| `report_step` | reporting step for scales with a dense set of attainable scores (see `mean_of_means`) [0.01] |
+| `items` | item table (below) |
+| `versions` | list of versions, each with its scales (below) |
+| `cells` | reporting cells and continuous-age settings (below) |
+| `uncertainty` | settings of the norm bands and intervals (below) |
+| `measurement` | calibration of the item models (below) |
+| `transfer` | optional transfer module (below) |
+
+YAML 1.1 reads the bare keys `n`, `y`, `no`, `yes`, `off`, `on` as booleans,
+so the number of items is given as `n_items`, not `n`.
+
+## `items`
+
+| Key | Meaning |
+|---|---|
+| `n_items` | number of items; item ids are then `1, ..., n_items` |
+| `ids` | alternatively, an explicit vector of integer item ids |
+| `prefix` | column name prefix in the data: item 5 is column `<prefix>5` [`"item_"`] |
+| `categories` | response codes as they appear in the data, from low to high [`[0, 1, 2, 3]`] |
+| `values` | score value of each category [`0, 1, ..., K - 1`] |
+| `unit` | all values must be multiples of `unit` (e.g. 0.5 for half points) [1] |
+| `reverse` | ids of reverse-keyed items (their values are reversed) |
+| `overrides` | list of `{items: [...], categories: [...], values: [...], reverse: true/false}` for items with a different format |
+
+Values must be non-negative. Non-uniform values are allowed, e.g.
+`values: [2, 1, 0, 1, 2]` for a bipolar item scored as distance from the
+midpoint. Item models always run on the categories ordered by value, so
+reverse-keyed items keep a positive slope. Every configured category must
+occur in the calibration data; collapse empty categories here.
+
+## `versions`
+
+Each version has an `id`, an optional `label` and a list of `scales`.
+Outcomes are named `<version id>_<scale id>`.
+
+| Scale key | Meaning |
+|---|---|
+| `id` | scale identifier, unique within the version |
+| `label` | display label [`id`] |
+| `level` | free label used in the exports, e.g. `facet`, `domain`, `total` [`"scale"`] |
+| `items` | item ids of the scale |
+| `components` | instead of `items`: earlier scales of the same version (by `id`) or inline `{id, items}` lists |
+| `metric` | `sum` (sum of item values), `mean` (sum / number of items), or `mean_of_means` (mean of the component means; needs `components`) [`mean`] |
+| `model` | `grm`, `bifactor`, `composite` or `none` [`grm` without components, `bifactor` with components] |
+| `calibrate_from` | outcome whose item model is used instead of fitting one, e.g. `full_a` for a short form scored with the long-form item parameters |
+| `equal_block_slopes` | `true`: specific slopes are constrained equal within each block of a bifactor model (needed for two-item blocks) |
+| `min_answered` | proportion of the items that must be answered for a prorated score [1] |
+| `observed` | `true`/`false` forces the direct or the transfer route; otherwise the route follows from the items present in the reference data |
+
+The attainable raw scores follow from the item values by convolution. A
+`mean_of_means` scale whose components differ in length (or in their value
+sets) has a dense set of attainable scores and is tabulated on a grid with
+step `report_step`.
+
+Models:
+
+- `grm`: unidimensional graded response model of the scale's items.
+- `bifactor`: general factor plus one specific factor per component.
+- `composite`: total scores; every component must also be a scale of the
+  same version with an item model (fitted or via `calibrate_from`). The components are coupled by a
+  second-order structure whose loadings are estimated from the component
+  scores of the calibration data.
+- `none`: norms and norm bands only, no individual intervals.
+
+## `cells`
+
+| Key | Meaning |
+|---|---|
+| `gender` | gender codes that form reporting cells, as in `meta$gender` (omit for no gender cells) |
+| `age_breaks` | breaks of the age bands, closed on the left; `Inf` (or `.inf`) for an open upper band (omit for no age bands) |
+| `ages` | `[from, to]`: range of integer ages for continuous-age norms (omit to skip stage `M3b`) |
+| `overall` | also compute the overall table [`true`] |
+| `kernel` | continuous-age kernel: `half_width0` [4], `min_neff` [150], `max_half_width` [12] |
+
+The reporting cells are all combinations of the configured gender codes and
+age bands. For continuous-age norms an Epanechnikov kernel around every
+target age starts at `half_width0` years and widens by one year until the
+local effective sample size reaches `min_neff`, up to `max_half_width`.
+
+## `uncertainty`
+
+| Key | Meaning |
+|---|---|
+| `prior_mass` | effective number of pseudo-observations per reporting cell, spread uniformly over the attainable scores; 0 switches the prior off [1] |
+| `n_boot` | number of Bayesian-bootstrap draws for the norm bands [200] |
+| `n_param_draws` | number of item-parameter draws for the integrated intervals [50] |
+| `probs` | lower and upper quantile of bands and intervals [`[0.025, 0.975]`] |
+| `pctl_clamp` | percentile ranks are clamped to `[pctl_clamp, 1 - pctl_clamp]` before the T transformation [1e-4] |
+| `pctl_convention` | `midpoint` or `cumulative` [`midpoint`] |
+
+Percentile conventions:
+
+- `midpoint`: PR = P(X < x) + ½ P(X = x), the classical percentile rank. Its
+  mean over the norm sample is exactly 50, and the lowest score is not
+  shifted upwards by the mass at that score.
+- `cumulative`: PR = P(X ≤ x), the relative cumulative frequency. Use it to
+  reproduce tables that were built with this convention.
+
+T = 50 + 10 Φ⁻¹(PR) in both cases.
+
+## `measurement`
+
+| Key | Meaning |
+|---|---|
+| `engine` | `auto` (mirt when installed, otherwise the built-in estimator), `mirt`, or `internal` [`auto`] |
+
+The item models are calibrated in the reference sample unless
+`run_norming()` gets a separate calibration sample (`calib`) or pre-fitted
+models (`models`). With mirt, a model whose Oakes information matrix cannot
+be inverted is refitted with a tighter EM tolerance and, if necessary, with
+the cross-product information; check `model$info$converged` for weakly
+identified bifactor models. The built-in estimator (penalised marginal
+maximum likelihood) needs no further package but is slow for long scales.
+
+## `transfer`
+
+The transfer module (stage `M2`) is needed only when the reference sample
+did not answer all items of some scales.
+
+| Key | Meaning |
+|---|---|
+| `enabled` | switch the module on [`false`] |
+| `bridge` | list of bridge predictors `{id, items}`: item sets answered by the reference sample and the donor samples; each enters as its mean item value |
+| `reference_level` | donor sample used as the reference level of the projection [first level of `meta$sample`] |
+| `n_draws` | posterior predictive draws per reference respondent [500] |
+| `adapt_delta` | sampler setting passed to brms [0.95] |
+| `backend` | `cmdstanr` or `rstan` [cmdstanr when installed, otherwise rstan] |
+
+The donor samples are attached to the instrument object before calling
+`run_norming()`:
+
+```r
+inst$donors_data <- list(meta = donor_meta, items = donor_items)
+```
+
+`donor_meta` needs `id`, `age`, `gender` and `sample`. For every scale that
+needs the transfer, a Bayesian distributional regression predicts the scale
+score from the bridge scores, `s(age)`, `gender` and `sample`, with an
+interval-censored normal likelihood and `sigma` depending on the mean bridge
+score and `s(age)`. The posterior predictive draws for the reference sample,
+evaluated at the reference level of `sample`, form the draw frame of the
+scale. With cmdstanr, CmdStan must be installed
+(`cmdstanr::install_cmdstan()`).
+
+A small example is `inst/instruments/demo7/demo7_transfer.yml`; a large one
+with 17 two-item bridge predictors is `inst/instruments/pid5/pid5.yml`.

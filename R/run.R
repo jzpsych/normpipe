@@ -3,7 +3,7 @@
 #
 # run_norming() runs the stages of the pipeline for one instrument and writes
 # every result to out_dir; stages are cached per scale and skipped when their
-# file exists, as in the original driver.
+# file exists.
 #
 #   P0   scoring of the reference sample, raking, routes per scale
 #   M1   calibration of the item models (reference sample by default)
@@ -12,7 +12,7 @@
 #   M3b  continuous-age kernel norms
 #   M3c  score-conditional EAP tables
 #   M3d  integrated intervals
-#   X1   exports (long table, platform tables, portal JSON)
+#   X1   exports (long table, per-version tables, portal JSON)
 #
 # INPUT. `ref` is a list(meta, items): meta has id, age, gender, weight (weight
 # may be missing: unit weights), items the item columns named as in the
@@ -24,16 +24,60 @@
 
 #' Run the norming pipeline
 #'
-#' @param inst instrument (read_instrument)
-#' @param ref reference sample: list(meta, items)
-#' @param out_dir output folder (caches and tables)
-#' @param freq optional named list of frequency tables per outcome
-#' @param calib optional calibration sample list(meta, items); default ref
-#' @param margins optional population margins for raking (make_margins)
-#' @param models optional named list of pre-fitted models per outcome
-#' @param stages which stages to run
-#' @param outcomes restrict to these outcomes (version_scale)
-#' @param portal_citation citation string written into the portal JSON
+#' Runs the stages of the pipeline for one instrument and writes every result
+#' to `out_dir`. Intermediate results are cached per scale as `.rds` files and
+#' a stage is skipped for a scale when its cache file exists; delete the
+#' files (or use a new `out_dir`) to recompute.
+#'
+#' Stages:
+#' * `P0`: scoring of the reference sample, optional raking to `margins`,
+#'   route per scale (direct, frequency or transfer).
+#' * `M1`: calibration of the item models ([fit_scale_model()]) in the
+#'   calibration sample (default: the reference sample).
+#' * `M2`: transfer models and projection for scales whose items the
+#'   reference sample did not answer (only with `transfer: enabled: true`;
+#'   donor samples in `inst$donors_data`, see [fit_transfer()]).
+#' * `M3a`: band norms per reporting cell and overall ([norms_all_cells()]).
+#' * `M3b`: continuous-age kernel norms ([weighted_norms_continuous()]).
+#' * `M3c`: score-conditional intervals ([conditional_tables()]).
+#' * `M3d`: integrated intervals ([integrated_intervals()]).
+#' * `X1`: exports: `norm_tables_long.csv`, `norm_tables_age_continuous.csv`,
+#'   `platform/norms_<version>.csv` ([export_platform_tables()]),
+#'   `portal/<instrument>.json` ([export_portal_json()], needs jsonlite) and
+#'   `x1_reliability.csv`.
+#'
+#' Scales without an item model (`model: none`, or frequency input without
+#' `models`) get norms and norm bands but no individual intervals. When
+#' transfer is disabled, scales that would need it are dropped.
+#'
+#' @param inst Instrument ([read_instrument()]).
+#' @param ref Reference sample: `list(meta, items)`. `meta` has `id`, `age`,
+#'   `gender` and optionally `weight` (unit weights otherwise); `items` holds
+#'   the item columns named `<prefix><item>`, in the same row order as `meta`.
+#' @param out_dir Output folder (caches and tables).
+#' @param freq Optional named list of frequency tables, one per outcome (see
+#'   [frequency_frame()]); these outcomes take the frequency route.
+#' @param calib Optional calibration sample `list(meta, items)` for stage
+#'   `M1`; default `ref`.
+#' @param margins Optional population margins for raking ([make_margins()]).
+#' @param models Optional named list of pre-fitted item models per outcome
+#'   ([fit_scale_model()]); they take precedence over stage `M1`.
+#' @param stages Stages to run (see Details).
+#' @param outcomes Restrict to these outcomes (`<version>_<scale>`).
+#' @param portal_citation Citation string written into the portal JSON.
+#' @param verbose Print progress messages.
+#' @return With stage `X1`, the long norm table (invisibly); otherwise
+#'   `NULL` (invisibly). All results are written to `out_dir`.
+#' @examples
+#' \dontrun{
+#' inst <- read_instrument(system.file("instruments/demo7/demo7.yml",
+#'                                     package = "normpipe"))
+#' sim <- simulate_reference(inst, N = 1500)
+#' res <- run_norming(inst, ref = list(meta = sim$meta, items = sim$items),
+#'                    out_dir = "demo-out",
+#'                    stages = c("P0", "M1", "M3a", "M3b", "M3c", "M3d", "X1"))
+#' }
+#' @export
 run_norming <- function(inst, ref = NULL, out_dir, freq = NULL, calib = NULL,
                         margins = NULL, models = NULL,
                         stages = c("P0", "M1", "M2", "M3a", "M3b", "M3c", "M3d", "X1"),

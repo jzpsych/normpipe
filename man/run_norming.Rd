@@ -33,7 +33,12 @@ the item columns named `<prefix><item>`, in the same row order as `meta`.}
 \item{calib}{Optional calibration sample `list(meta, items)` for stage
 `M1`; default `ref`.}
 
-\item{margins}{Optional population margins for raking ([make_margins()]).}
+\item{margins}{Optional population margins for raking: a margin data
+frame ([make_margins()]) or a list of margin data frames
+([rake_to_margins()]). Trimming, re-raking and the handling of
+respondents who cannot be raked follow the `weighting` block of the
+instrument (`trim_quantile` [0.99], `rerake` [true], `incomplete`
+[drop]).}
 
 \item{models}{Optional named list of pre-fitted item models per outcome
 ([fit_scale_model()]); they take precedence over stage `M1`.}

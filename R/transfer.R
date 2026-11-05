@@ -264,7 +264,7 @@ predict_average_level <- function(fit, pred_frame, n_draws, levels) {
   })) / length(levels)
   nd <- pred_frame; nd$sample <- factor(levels[1], levels = levels)
   sig <- brms::posterior_linpred(fit, newdata = nd, dpar = "sigma", transform = TRUE, draw_ids = ids)
-  fam <- brms::family(fit)$family
+  fam <- stats::family(fit)$family
   if (fam == "gaussian") {
     out <- stats::rnorm(length(mu), mu, sig)
   } else if (fam == "skew_normal") {

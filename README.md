@@ -82,8 +82,13 @@ See `inst/instruments/demo7/demo7.yml` (small, all scale types) and
   long form's item parameters), `equal_block_slopes` (doublet bifactor
   models), `min_answered`, `observed`.
 - `cells`: `gender`, `age_breaks`, `ages`, `kernel`; `uncertainty`:
-  `prior_mass`, `n_boot`, `n_param_draws`, `probs`, `pctl_clamp`;
-  `measurement.engine`: `auto`, `mirt`, `internal`.
+  `prior_mass`, `n_boot`, `n_param_draws`, `probs`, `pctl_clamp`,
+  `pctl_convention` (`cumulative` = P(X ≤ x), the default and the convention
+  of the PID-5, IPO-16 and LPFS-BF norms; `midpoint` = P(X < x) + ½ P(X = x),
+  the classical percentile rank, which keeps floor scores below T 50; chosen
+  by J. Zimmermann on 2026-11-05 as a switch so that the published norms stay
+  reproducible and a revision can move to midpoint); `measurement.engine`: `auto`,
+  `mirt`, `internal`.
 
 ## Status (2026-11-04)
 
@@ -119,7 +124,10 @@ See `inst/instruments/demo7/demo7.yml` (small, all scale types) and
   intervals of that domain (about 1 T on average, up to 14 T in sparse
   tails). The PID-5 domain models (three facets of 6 to 14 items) are not
   expected to show this.
-- Not yet run on real data: the PID-5 configuration; cmdstanr not tested
-  (its download hosts were blocked in the development environment).
+- cmdstanr backend of the transfer module tested on the same simulated
+  case (CmdStan 2.36.0): 37 min including model compilation, T values
+  within 0.1 to 0.4 T of the rstan run on average (MCMC noise); both
+  backends work, cmdstanr stays the default when installed.
+- Not yet run on real data: the PID-5 configuration.
 - Raking uses `survey::rake`; margins are given with `make_margins()`.
 - Licence: GPL-3, see LICENSE.md.

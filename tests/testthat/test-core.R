@@ -97,3 +97,18 @@ test_that("partial item sets score only the scales whose items are present", {
   expect_true(all(is.na(part$full_a)) && all(is.na(part$full_total)))
   expect_error(score_scales(sim$items[, c("it1", "it2")], inst), "missing")
 })
+
+test_that("midpoint percentile ranks sit half a score mass below the cumulative ones", {
+  x <- c(5, 5, 5, 6, 7, 7, 9); w <- rep(1, 7); g <- 5:9
+  cum <- wecdf_at(x, w, g); mid <- wecdf_at(x, w, g, "midpoint")
+  expect_equal(cum, c(3, 4, 6, 6, 7) / 7)
+  expect_equal(mid, cum - c(3, 1, 2, 0, 1) / 14)
+  expect_error(wecdf_at(x, w, g, "other"))
+  inst <- demo_inst(); inst$uncertainty$pctl_convention <- "midpoint"
+  sim <- simulate_reference(inst, N = 200, seed = 7); sc <- score_scales(sim$items, inst)
+  s <- get_scale(inst, "full_b"); ref <- dplyr::mutate(sim$meta, score = sc$full_b)
+  fr <- direct_frame(ref, s, inst, n_boot = 0, prior_mass = 0)
+  nm_mid <- weighted_norms(fr, s, inst, cells = character(0))
+  nm_cum <- weighted_norms(fr, s, inst, cells = character(0), convention = "cumulative")
+  expect_true(all(nm_mid$pctl_med <= nm_cum$pctl_med + 1e-12))
+})

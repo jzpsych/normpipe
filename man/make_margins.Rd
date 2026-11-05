@@ -7,7 +7,16 @@
 \usage{
 make_margins(pop, inst)
 
-rake_to_margins(meta, margins, inst, trim_quantile = 0.99)
+rake_to_margins(
+  meta,
+  margins,
+  inst,
+  trim_quantile = 0.99,
+  rerake = TRUE,
+  max_rounds = 50,
+  tol = 0.001,
+  incomplete = c("drop", "keep")
+)
 }
 \arguments{
 \item{pop}{Tibble with `age` (single years), `gender` and `Freq`
@@ -16,23 +25,59 @@ rake_to_margins(meta, margins, inst, trim_quantile = 0.99)
 \item{inst}{Instrument ([read_instrument()]).}
 
 \item{meta}{Tibble with `id`, `age`, `gender`, `weight` (design weight; 1
-if none).}
+if none) and any further raking variables.}
 
-\item{margins}{Output of `make_margins()`.}
+\item{margins}{A margin data frame (e.g. the output of `make_margins()`)
+or a list of margin data frames (see Details).}
 
-\item{trim_quantile}{Raked weights are trimmed at this quantile.}
+\item{trim_quantile}{Raked weights are capped at this quantile; `1`
+switches trimming off.}
+
+\item{rerake}{Rake again after trimming until the margins hold (see
+Details).}
+
+\item{max_rounds}{Maximum number of rake-and-trim rounds.}
+
+\item{tol}{Relative tolerance for the margins and the cap.}
+
+\item{incomplete}{`"drop"` or `"keep"` respondents who cannot be raked.}
 }
 \value{
 `make_margins()`: data frame with the cell variables and `Freq`.
 
-`rake_to_margins()`: `meta` (rows with complete cell variables)
-  with column `weight_raked` and attribute `"diagnostics"` (Kish effective
-  N before and after raking, ratio of largest to smallest weight).
+`rake_to_margins()`: `meta` with column `weight_raked` (rows that
+  cannot be raked are dropped or kept, see `incomplete`; a logical column
+  `raked` marks the raked rows) and attribute `"diagnostics"` (Kish
+  effective N before and after raking, ratio of largest to smallest
+  weight, number of rounds, share of capped weights, largest relative
+  deviation from a margin, number of rows not raked).
 }
 \description{
 `make_margins()` aggregates single-year population counts to the
 reporting cells of an instrument. `rake_to_margins()` rakes the design
-weights of the reference sample to these margins with [survey::rake()],
-trims them at `trim_quantile` and rescales them to the net sample size.
-[run_norming()] calls it when `margins` is given.
+weights of the reference sample to one or more population margins with
+[survey::rake()], trims them at `trim_quantile` and rescales them to the
+net sample size. [run_norming()] calls it when `margins` is given.
+}
+\details{
+Each margin is a data frame whose columns other than `Freq` name the
+raking variables of that margin (e.g. `age_group` and `gender`, or
+`education`). `age_group` is derived from `age` and the age bands of the
+instrument; every other variable must be a column of `meta`. A single data
+frame is one margin (the joint distribution of its variables), a list of
+data frames are several margins raked jointly.
+
+Trimming: the cap is the `trim_quantile` quantile of the raked weights.
+With `rerake = TRUE` (default) the capped weights are raked again and
+capped again, up to `max_rounds` times, until every margin deviates by
+less than `tol` (relative) and no weight exceeds the cap by more than
+`tol`. With `rerake = FALSE` the weights are capped once, as in normpipe
+0.1.0, and the margins hold only approximately.
+
+Respondents with a missing raking variable (or a gender outside the
+configured cells, when `gender` is a raking variable) cannot be raked.
+With `incomplete = "drop"` (default) they are dropped; with
+`incomplete = "keep"` they keep their design weight, rescaled by the mean
+ratio of raked to design weights, and enter the norms of every table that
+does not condition on the missing variable (e.g. the overall norms).
 }

@@ -14,12 +14,23 @@ fit_transfer(
   s,
   inst,
   exclude = NULL,
-  adapt_delta = inst$transfer$adapt_delta \%||\% 0.95,
-  max_treedepth = 10,
-  file = NULL
+  formula = NULL,
+  sigma = NULL,
+  family = NULL,
+  adapt_delta = NULL,
+  max_treedepth = NULL,
+  file = NULL,
+  ...
 )
 
-project_outcome(fit, pred_frame, s, n_draws = 500)
+project_outcome(
+  fit,
+  pred_frame,
+  s,
+  n_draws = 500,
+  level = NULL,
+  bootstrap_weights = FALSE
+)
 }
 \arguments{
 \item{items_df}{Data frame with the bridge item columns.}
@@ -35,19 +46,37 @@ reference level).}
 \item{s}{Scale specification ([get_scale()]).}
 
 \item{exclude}{Bridge ids to leave out of the predictors (e.g. the bridge
-items of the outcome itself).}
+items of the outcome itself); default from [transfer_spec()].}
+
+\item{formula, sigma}{Right-hand sides of the mean and the sigma model;
+`{bridge}` in `formula` stands for the bridge predictors. Default from
+[transfer_spec()].}
+
+\item{family}{`"gaussian"` or `"skew_normal"` (the latent distribution of
+the interval-censored likelihood).}
 
 \item{adapt_delta, max_treedepth}{Sampler settings passed to brms.}
 
 \item{file}{Optional file path for caching the brms fit.}
 
+\item{...}{Further arguments passed to [brms::brm()] (e.g. `chains`,
+`iter`, `seed`, `refresh`).}
+
 \item{fit}{Transfer model (`fit_transfer()`).}
 
 \item{pred_frame}{Prediction frame of the reference sample: `id`, `age`,
-`gender`, `weight`, the bridge columns and `sample` (set to the
-reference level).}
+`gender`, `weight`, the bridge columns and `sample`.}
 
 \item{n_draws}{Number of posterior predictive draws per respondent.}
+
+\item{level}{Level of `sample` at which the reference sample is projected:
+a donor sample, or `"average"` (the mean of the sample effects over all
+donor samples). Default: the level already set in `pred_frame`.}
+
+\item{bootstrap_weights}{If `TRUE`, the reference weights are replaced in
+every posterior draw by `weight x Exp(1)` (Bayesian bootstrap), so that
+the norm band contains the sampling uncertainty of the reference sample
+as well as the uncertainty of the transfer model.}
 }
 \value{
 `bridge_scores()`: tibble with one column `br_<id>` per bridge
@@ -62,12 +91,17 @@ The transfer module is needed only for scales whose items the reference
 sample did not answer. A bridge (items answered by the reference sample
 and by one or more donor samples that answered the full instrument)
 predicts every such scale score through a Bayesian distributional
-regression fitted with brms: the bridge scores, `s(age)`, `gender` and
-`sample` predict the score with an interval-censored normal likelihood,
-and `sigma` depends on the mean bridge score and `s(age)`. The posterior
-predictive draws for every reference respondent, snapped to the attainable
-scores, form the draw frame of the scale. [run_norming()] runs these steps
-in stage `M2`; the donor samples are supplied as
+regression fitted with brms. By default the bridge scores, `s(age)`,
+`gender` and `sample` predict the score with an interval-censored normal
+likelihood, and `sigma` depends on the mean bridge score and `s(age)`. The
+mean model, the sigma model and the latent distribution (`gaussian` or
+`skew_normal`) are configurable (`transfer$formula`, `transfer$sigma`,
+`transfer$family`, per outcome under `transfer$outcomes`), e.g.
+`"{bridge} + s(age, by = gender) + gender + sample"` for gender-specific
+age trajectories; `{bridge}` stands for the bridge predictors. The
+posterior predictive draws for every reference respondent, snapped to the
+attainable scores, form the draw frame of the scale. [run_norming()] runs
+these steps in stage `M2`; the donor samples are supplied as
 `inst$donors_data <- list(meta, items)` with a column `meta$sample`.
 }
 \details{

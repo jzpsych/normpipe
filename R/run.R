@@ -59,7 +59,12 @@
 #'   [frequency_frame()]); these outcomes take the frequency route.
 #' @param calib Optional calibration sample `list(meta, items)` for stage
 #'   `M1`; default `ref`.
-#' @param margins Optional population margins for raking ([make_margins()]).
+#' @param margins Optional population margins for raking: a margin data
+#'   frame ([make_margins()]) or a list of margin data frames
+#'   ([rake_to_margins()]). Trimming, re-raking and the handling of
+#'   respondents who cannot be raked follow the `weighting` block of the
+#'   instrument (`trim_quantile` [0.99], `rerake` [true], `incomplete`
+#'   [drop]).
 #' @param models Optional named list of pre-fitted item models per outcome
 #'   ([fit_scale_model()]); they take precedence over stage `M1`.
 #' @param stages Stages to run (see Details).
@@ -97,7 +102,11 @@ run_norming <- function(inst, ref = NULL, out_dir, freq = NULL, calib = NULL,
     if (!"gender" %in% names(meta)) meta$gender <- NA_character_
     if (!"age" %in% names(meta)) meta$age <- NA_real_
     if (!is.null(margins)) {
-      raked <- rake_to_margins(meta, margins, inst)
+      wcfg <- inst$weighting %||% list()
+      raked <- rake_to_margins(meta, margins, inst,
+                               trim_quantile = wcfg$trim_quantile %||% 0.99,
+                               rerake = wcfg$rerake %||% TRUE,
+                               incomplete = wcfg$incomplete %||% "drop")
       saveRDS(attr(raked, "diagnostics"), cache("p0_rake_diagnostics"))
       dg <- attr(raked, "diagnostics")
       say("Raking: Kish N_eff ", round(dg$kish_neff_design), " -> ", round(dg$kish_neff_raked))
@@ -170,6 +179,24 @@ run_norming <- function(inst, ref = NULL, out_dir, freq = NULL, calib = NULL,
     s <- get_scale(inst, o)
     saveRDS(norms_all_cells(draws_for(o), s, inst), f)
     say("M3a ", o, " done")
+  }
+
+  # ---- C1: leave-own-domain-out cross-check (transfer$crosscheck) -----------
+  cross <- intersect(unlist(inst$transfer$crosscheck), reg$outcome[reg$route != "transfer"])
+  if ("M3a" %in% stages && isTRUE(inst$transfer$enabled) && length(cross)) {
+    cc <- map_dfr(cross, \(o) {
+      f <- cache(paste0("m3a_lodo_", o))
+      if (!file.exists(f)) {
+        if (!file.exists(file.path(out_dir, paste0("transfer_", o, "_lodo.rds")))) return(NULL)
+        s <- get_scale(inst, o)
+        saveRDS(norms_all_cells(project_frame(o, s, inst, out_dir, suffix = "_lodo"), s, inst), f)
+        say("C1 ", o, ": leave-own-domain-out norms done")
+      }
+      direct <- cache(paste0("m3a_norms_", o))
+      if (!file.exists(direct)) return(NULL)
+      crosscheck_table(readRDS(direct), readRDS(f)) %>% mutate(outcome = o, .before = 1)
+    })
+    if (nrow(cc)) write_csv(cc, file.path(out_dir, "c1_crosscheck.csv"))
   }
 
   # ---- M3b: continuous-age norms -------------------------------------------

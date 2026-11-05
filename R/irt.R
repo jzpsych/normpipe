@@ -155,24 +155,51 @@ fit_scale_model <- function(idx, s, inst, engine = inst$measurement$engine %||% 
 fit_with_mirt <- function(dat, K, values, spec, ncycles, constrain_blocks = FALSE) {
   if (!requireNamespace("mirt", quietly = TRUE)) stop("mirt is not installed.")
   n <- ncol(dat)
-  if (is.null(spec)) {
-    mod <- mirt::mirt(dat, 1, itemtype = "graded", SE = TRUE, verbose = FALSE,
-                      technical = list(NCYCLES = ncycles))
-    nf <- 1L; cons <- list()
-  } else {
-    cons <- list()
-    if (constrain_blocks) {
-      # equal specific slopes within a block (doublets: just identified)
-      sv <- mirt::bfactor(dat, spec, pars = "values")
-      cons <- map(unique(spec), \(b) {
-        pn <- sv$parnum[sv$name == paste0("a", 1 + b) & sv$est]
-        pn
-      })
-    }
-    mod <- mirt::bfactor(dat, spec, SE = TRUE, verbose = FALSE,
-                         constrain = if (length(cons)) cons else NULL,
-                         technical = list(NCYCLES = ncycles))
-    nf <- 1L + length(unique(spec))
+  cons <- list()
+  if (!is.null(spec) && constrain_blocks) {
+    # equal specific slopes within a block (doublets: just identified)
+    sv <- mirt::bfactor(dat, spec, pars = "values")
+    cons <- map(unique(spec), \(b) sv$parnum[sv$name == paste0("a", 1 + b) & sv$est])
+  }
+  fit <- function(SE.type, TOL = 1e-4) {
+    nc <- if (TOL < 1e-4) max(ncycles, 5000L) else ncycles   # tighter tolerance needs more cycles
+    if (is.null(spec))
+      mirt::mirt(dat, 1, itemtype = "graded", SE = TRUE, SE.type = SE.type, TOL = TOL,
+                 verbose = FALSE, technical = list(NCYCLES = nc))
+    else
+      mirt::bfactor(dat, spec, SE = TRUE, SE.type = SE.type, TOL = TOL, verbose = FALSE,
+                    constrain = if (length(cons)) cons else NULL,
+                    technical = list(NCYCLES = nc))
+  }
+  nf <- if (is.null(spec)) 1L else 1L + length(unique(spec))
+  vcov_of <- function(mod) {
+    V <- tryCatch(mirt::extract.mirt(mod, "vcov"), error = \(e) NULL)
+    if (!is.null(V) && (nrow(V) < 2 || anyNA(V))) NULL else V
+  }
+  # Oakes information (mirt's default) at the default EM tolerance first.
+  # When it cannot be inverted, the EM solution usually sits slightly off the
+  # optimum (seen for a weakly identified bifactor model, where the slopes
+  # still moved with a tighter tolerance): refit with TOL = 1e-5, which costs
+  # time but gives the maximum-likelihood solution and a proper information
+  # matrix. The cross-product information is the last resort; its standard
+  # errors are much larger than the Oakes ones in such cases.
+  quiet <- function(expr) withCallingHandlers(expr,
+    warning = \(w) if (grepl("invert information matrix", conditionMessage(w)))
+      invokeRestart("muffleWarning"))
+  mod <- quiet(fit("Oakes"))
+  V <- vcov_of(mod)
+  if (is.null(V)) {
+    message("mirt: Oakes information matrix not invertible; refitting with TOL = 1e-5")
+    mod <- quiet(fit("Oakes", TOL = 1e-5))
+    V <- vcov_of(mod)
+  }
+  if (is.null(V)) {
+    message("mirt: still not invertible; refitting with SE.type = 'crossprod'")
+    mod <- fit("crossprod", TOL = 1e-5)
+    V <- vcov_of(mod)
+    if (is.null(V))
+      warning("mirt: no usable information matrix for this model; item-parameter ",
+              "draws will use the point estimates.", call. = FALSE)
   }
   co <- mirt::coef(mod, simplify = TRUE)$items
   a <- as.matrix(co[, paste0("a", seq_len(nf)), drop = FALSE])
@@ -181,7 +208,6 @@ fit_with_mirt <- function(dat, K, values, spec, ncycles, constrain_blocks = FALS
   sv <- sv[sv$class == "graded", c("parnum", "item", "name", "value", "est")]
   sv$item <- match(sv$item, colnames(dat))
   tab <- as_tibble(sv)
-  V <- tryCatch(mirt::extract.mirt(mod, "vcov"), error = \(e) NULL)
   parvec <- tryCatch(mirt::extract.mirt(mod, "parvec"), error = \(e) NULL)
   m <- new_scale_model(if (is.null(spec)) "grm" else "bifactor", seq_len(n), K, values,
                        a, d, spec = spec, par_table = tab, vcov = V,

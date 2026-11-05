@@ -51,13 +51,18 @@ item_values <- function(idx, inst, items = inst$items$item) {
 #' @param prorate if TRUE, scales with at least min_answered of their items
 #'   answered are scored from the available items (item means, or sums scaled
 #'   up); otherwise any missing item gives NA
+#' @param partial if TRUE, item columns absent from `dat` are allowed (e.g., a
+#'   reference sample that answered only the bridge items); scales that need
+#'   an absent item are returned as NA
 #' @return tibble with one column per outcome (version_scale), raw metric
-score_scales <- function(dat, inst, prorate = TRUE) {
-  idx <- item_indices(dat, inst)
-  vals <- item_values(idx, inst)
+score_scales <- function(dat, inst, prorate = TRUE, partial = FALSE) {
+  present <- if (partial) inst$items$item[inst$items$col %in% names(dat)] else inst$items$item
+  idx <- item_indices(dat, inst, items = present)
+  vals <- item_values(idx, inst, items = present)
   out <- list()
   for (v in inst$versions) for (s in v$scales) {
-    out[[paste0(v$id, "_", s$id)]] <- score_one_scale(vals, s, inst, prorate)
+    out[[paste0(v$id, "_", s$id)]] <- if (all(s$items %in% present))
+      score_one_scale(vals, s, inst, prorate) else rep(NA_real_, nrow(dat))
   }
   as_tibble(out)
 }

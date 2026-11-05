@@ -5,15 +5,29 @@
 # share at or below every attainable score is computed; across draws the
 # median gives the norm value and the 2.5th/97.5th percentiles the norm band.
 # T = 50 + 10 * qnorm(percentile), with the percentile clamped at pctl_clamp.
+#
+# Percentile convention (uncertainty$pctl_convention):
+#   "midpoint"    PR = P(X < x) + P(X = x) / 2, the classical percentile rank
+#                 (Lienert & Raatz): the mean percentile rank of the norm
+#                 sample is exactly 50 and floor scores are not shifted
+#                 upwards (default, decision J. Zimmermann 2026-11-05)
+#   "cumulative"  PR = P(X <= x), the relative cumulative frequency of the
+#                 PID-5 preprint v2, the IPO-16 and LPFS-BF norms (option, to
+#                 reproduce those tables)
 # ==============================================================================
 
 TICK_TOL <- 1e-8
 
-#' Weighted empirical CDF evaluated at the grid points
-wecdf_at <- function(score, weight, grid) {
+#' Weighted percentile ranks at the grid points
+#' @param convention "midpoint" (P(X < x) + P(X = x) / 2, default) or "cumulative" (P(X <= x))
+wecdf_at <- function(score, weight, grid, convention = "midpoint") {
+  convention <- match.arg(convention, c("midpoint", "cumulative"))
   o <- order(score)
-  cw <- cumsum(weight[o])
-  c(0, cw)[findInterval(grid + TICK_TOL, score[o]) + 1] / cw[length(cw)]
+  cw <- cumsum(weight[o]); tot <- cw[length(cw)]
+  at_or_below <- c(0, cw)[findInterval(grid + TICK_TOL, score[o]) + 1] / tot
+  if (convention == "cumulative") return(at_or_below)
+  below <- c(0, cw)[findInterval(grid - TICK_TOL, score[o]) + 1] / tot
+  (at_or_below + below) / 2
 }
 
 pctl_to_T <- function(p, clamp = 1e-4) 50 + 10 * qnorm(pmin(pmax(p, clamp), 1 - clamp))
@@ -28,7 +42,8 @@ pctl_to_T <- function(p, clamp = 1e-4) 50 + 10 * qnorm(pmin(pmax(p, clamp), 1 - 
 #'   T, T_lo, T_hi, n_eff (Kish effective N of the point frame)
 weighted_norms <- function(fr, s, inst, cells = cell_vars(inst),
                            probs = inst$uncertainty$probs,
-                           clamp = inst$uncertainty$pctl_clamp) {
+                           clamp = inst$uncertainty$pctl_clamp,
+                           convention = inst$uncertainty$pctl_convention %||% "midpoint") {
   n_bad <- sum(is.na(fr$score) | is.na(fr$weight))
   if (n_bad > 0) stop("weighted_norms(): ", n_bad, " rows with NA score or weight.")
   grid <- s$grid
@@ -42,7 +57,7 @@ weighted_norms <- function(fr, s, inst, cells = cell_vars(inst),
     summarise(n_eff = sum(.data$weight)^2 / sum(.data$weight^2), n = n(), .groups = "drop")
   out <- fr %>%
     group_by(across(all_of(grp)), .data$.draw) %>%
-    reframe(raw = grid, pctl = wecdf_at(.data$score, .data$weight, grid)) %>%
+    reframe(raw = grid, pctl = wecdf_at(.data$score, .data$weight, grid, convention)) %>%
     group_by(across(all_of(grp)), .data$raw) %>%
     summarise(pctl_med = median(.data$pctl),
               pctl_lo = quantile(.data$pctl, probs[1]),
@@ -76,7 +91,8 @@ norms_all_cells <- function(fr, s, inst) {
 #' everybody else.
 weighted_norms_continuous <- function(fr, s, inst, ages = inst$cells$ages,
                                       probs = inst$uncertainty$probs,
-                                      clamp = inst$uncertainty$pctl_clamp) {
+                                      clamp = inst$uncertainty$pctl_clamp,
+                                      convention = inst$uncertainty$pctl_convention %||% "midpoint") {
   k <- inst$cells$kernel
   grid <- s$grid
   fr <- filter(fr, !is.na(.data$age))
@@ -98,7 +114,7 @@ weighted_norms_continuous <- function(fr, s, inst, ages = inst$cells$ages,
       kv <- setNames(kern, persons$id)
       pa <- pg %>% mutate(w = .data$weight * kv[as.character(.data$id)]) %>%
         filter(.data$w > 0)
-      P <- sapply(draws, \(d) { x <- pa[pa$.draw == d, ]; wecdf_at(x$score, x$w, grid) })
+      P <- sapply(draws, \(d) { x <- pa[pa$.draw == d, ]; wecdf_at(x$score, x$w, grid, convention) })
       P <- matrix(P, nrow = length(grid))
       tibble(gender = g, age = a, half_width = hw, n_eff_local = neff, raw = grid,
              pctl_med = apply(P, 1, median),

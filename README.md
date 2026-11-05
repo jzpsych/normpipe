@@ -44,10 +44,10 @@ Design decisions (agreed with J. Zimmermann, 2026-11-04):
 ## Install and run
 
 ```r
-# from the package folder
-R CMD INSTALL normpipe
+# install.packages("remotes")
+remotes::install_github("jzpsych/normpipe")
 library(normpipe)
-inst <- read_instrument("normpipe/inst/instruments/demo7/demo7.yml")
+inst <- read_instrument(system.file("instruments/demo7/demo7.yml", package = "normpipe"))
 scale_registry(inst)                      # every version_scale outcome
 sim <- simulate_reference(inst, N = 1500) # or your own list(meta, items)
 res <- run_norming(inst, ref = list(meta = sim$meta, items = sim$items),
@@ -71,7 +71,7 @@ run_norming(inst, freq = freq, out_dir = "out", stages = c("P0", "M3a", "M3b", "
 ## Instrument YAML
 
 See `inst/instruments/demo7/demo7.yml` (small, all scale types) and
-`inst/instruments/pid5/pid5.yml` (the PID-5 family, 92 outcomes). Keys:
+`inst/instruments/pid5/pid5.yml` (the PID-5 family, 75 outcomes). Keys:
 
 - `items`: `n_items` (or `ids`), `prefix`, `categories`, optional `values`,
   `reverse`, per-item `overrides`.
@@ -82,8 +82,14 @@ See `inst/instruments/demo7/demo7.yml` (small, all scale types) and
   long form's item parameters), `equal_block_slopes` (doublet bifactor
   models), `min_answered`, `observed`.
 - `cells`: `gender`, `age_breaks`, `ages`, `kernel`; `uncertainty`:
-  `prior_mass`, `n_boot`, `n_param_draws`, `probs`, `pctl_clamp`;
-  `measurement.engine`: `auto`, `mirt`, `internal`.
+  `prior_mass`, `n_boot`, `n_param_draws`, `probs`, `pctl_clamp`,
+  `pctl_convention` (`midpoint`, the default: PR = P(X < x) + ½ P(X = x), the
+  classical percentile rank of Lienert & Raatz, whose mean over the norm
+  sample is exactly 50; `cumulative`: PR = P(X ≤ x), the convention of the
+  PID-5 preprint v2, IPO-16 and LPFS-BF tables, kept as an option to
+  reproduce them; decision J. Zimmermann 2026-11-05, the PID-5 manuscript
+  moves to midpoint in its revision); `measurement.engine`: `auto`,
+  `mirt`, `internal`.
 
 ## Status (2026-11-04)
 
@@ -92,10 +98,37 @@ See `inst/instruments/demo7/demo7.yml` (small, all scale types) and
   short form calibrated from the long form; 27 unit tests
   (`tests/testthat`: Lord–Wingersky vs brute force, frequency vs individual
   frames, prior mass per cell, grids, EAP monotonicity).
-- Not yet run on real data: the PID-5 configuration (checked against the
-  original keys: 25 + 5 + 1 outcomes for full and SF, 5 + 1 for BF, 17 + 5
-  for BF+, Anankastia and the 30-item total for BF+M; routes direct/transfer
-  as in the original), the transfer module (`R/transfer.R`, needs brms), the
-  mirt engine (mirt was not installable in the development environment).
+- PID-5 configuration checked against the original pipeline without data
+  (`scripts/check_pid5_against_original.R path/to/pid5_norming_pipeline.R`):
+  item keys and item order of all 75 outcomes (31 full, 31 SF, 6 BF, 7
+  PID5BF+M), reverse keying, scoring of random responses (identical to
+  machine precision), the 69 transfer outcomes and the 6 direct outcomes
+  under the GESIS bridge all agree with the original. The 17 two-item facet
+  doublets of the PID5BF+ are bridge predictors only, not normed scales.
+- Transfer module (stage M2, brms with rstan) tested end to end on
+  simulated data (`scripts/smoke_transfer.R`): with only four bridge items
+  observed in the reference sample, the projected norms of the full-form
+  scales differ from the norms of the true full responses by 0.6 T (facet)
+  and 0.7 T (total) on average, and 97.5 % / 98.5 % of the true values lie
+  inside the norm bands (5th to 95th percentile).
+- mirt engine tested on the demo instrument (`scripts/smoke.R` with
+  `measurement.engine: mirt`): 2.5 min instead of 12 min with the internal
+  estimator; the GRM scales agree with the internal estimator to within
+  0.5 T in every column of the norm table. The demo's bifactor domain (two
+  specific factors of four items) is weakly identified: mirt's Oakes
+  information matrix is singular at the default EM tolerance, so
+  `fit_with_mirt()` refits with `TOL = 1e-5` (then, as a last resort, with
+  the cross-product information; on the demo the EM still reports
+  non-convergence after 5000 cycles at that tolerance, with the specific
+  factor of one block collapsing towards zero); the resulting maximum-likelihood solution
+  differs from the penalised internal one in the conditional and integrated
+  intervals of that domain (about 1 T on average, up to 14 T in sparse
+  tails). The PID-5 domain models (three facets of 6 to 14 items) are not
+  expected to show this.
+- cmdstanr backend of the transfer module tested on the same simulated
+  case (CmdStan 2.36.0): 37 min including model compilation, T values
+  within 0.1 to 0.4 T of the rstan run on average (MCMC noise); both
+  backends work, cmdstanr stays the default when installed.
+- Not yet run on real data: the PID-5 configuration.
 - Raking uses `survey::rake`; margins are given with `make_margins()`.
-- Licence: to be chosen (LICENSE is a placeholder).
+- Licence: GPL-3, see LICENSE.md.

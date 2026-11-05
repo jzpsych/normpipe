@@ -114,7 +114,8 @@ conditional_tables <- function(blocks, s, fr, nm, inst, sum_scores = NULL,
 integrated_intervals <- function(blocks_fun, model_draws, s, fr, inst,
                                  sum_scores = NULL, probs = inst$uncertainty$probs,
                                  T_grid = seq(10, 90, by = 0.1),
-                                 clamp = inst$uncertainty$pctl_clamp, ...) {
+                                 clamp = inst$uncertainty$pctl_clamp,
+                                 convention = inst$uncertainty$pctl_convention %||% "midpoint", ...) {
   n_param <- length(model_draws)
   sum_scores <- sum_scores %||% eap_sum_rows(s)
   draw_ids <- sort(unique(fr$.draw))
@@ -130,7 +131,7 @@ integrated_intervals <- function(blocks_fun, model_draws, s, fr, inst,
     for (key in names(cells)) {
       sub <- cells[[key]] %>% filter(.data$.draw %in% chunks[[r]])
       pw <- score_dist_to_theta_prior(sub$score, sub$weight, esc, s$step)
-      p <- wecdf_at(sub$score, sub$weight, s$grid)
+      p <- wecdf_at(sub$score, sub$weight, s$grid, convention)
       Tmap <- make_Tmap(esc, tibble(raw = s$grid, T = pctl_to_T(p, clamp)))
       ep <- eapsum_table(bl, s, esc$theta, pw, sum_scores = sum_scores,
                          return_posterior = TRUE, prep = prep, ...)

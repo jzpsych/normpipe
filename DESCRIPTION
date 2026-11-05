@@ -19,7 +19,7 @@ Description: Generalization of the norming pipeline of Zimmermann, Kerber,
     answer (short-form bridge to full-length scales) is optional. The PID-5
     norms of the original publication are the first use case and are
     reproduced from the configuration in inst/instruments/pid5.
-License: file LICENSE
+License: GPL-3
 Encoding: UTF-8
 Depends: R (>= 4.2)
 Imports:

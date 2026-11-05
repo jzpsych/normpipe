@@ -62,7 +62,7 @@ run_norming <- function(inst, ref = NULL, out_dir, freq = NULL, calib = NULL,
     }
     item_cols <- intersect(inst$items$col, names(ref$items))
     observed_items <- inst$items$item[match(item_cols, inst$items$col)]
-    sc <- score_scales(ref$items, inst)
+    sc <- score_scales(ref$items, inst, partial = TRUE)
     ref_scores <- bind_cols(meta, sc[match(meta$id, ref$meta$id), ])
     saveRDS(ref_scores, cache("p0_reference_scores"))
   }

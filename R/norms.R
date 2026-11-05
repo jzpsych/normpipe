@@ -7,19 +7,21 @@
 # T = 50 + 10 * qnorm(percentile), with the percentile clamped at pctl_clamp.
 #
 # Percentile convention (uncertainty$pctl_convention):
-#   "cumulative"  PR = P(X <= x), the relative cumulative frequency as in the
-#                 PID-5 pipeline, the IPO-16 and LPFS-BF norms (default)
 #   "midpoint"    PR = P(X < x) + P(X = x) / 2, the classical percentile rank
-#                 (Lienert & Raatz); unbiased for a person with that score and
-#                 without the upward shift of floor scores
+#                 (Lienert & Raatz): the mean percentile rank of the norm
+#                 sample is exactly 50 and floor scores are not shifted
+#                 upwards (default, decision J. Zimmermann 2026-11-05)
+#   "cumulative"  PR = P(X <= x), the relative cumulative frequency of the
+#                 PID-5 preprint v2, the IPO-16 and LPFS-BF norms (option, to
+#                 reproduce those tables)
 # ==============================================================================
 
 TICK_TOL <- 1e-8
 
 #' Weighted percentile ranks at the grid points
-#' @param convention "cumulative" (P(X <= x)) or "midpoint" (P(X < x) + P(X = x) / 2)
-wecdf_at <- function(score, weight, grid, convention = "cumulative") {
-  convention <- match.arg(convention, c("cumulative", "midpoint"))
+#' @param convention "midpoint" (P(X < x) + P(X = x) / 2, default) or "cumulative" (P(X <= x))
+wecdf_at <- function(score, weight, grid, convention = "midpoint") {
+  convention <- match.arg(convention, c("midpoint", "cumulative"))
   o <- order(score)
   cw <- cumsum(weight[o]); tot <- cw[length(cw)]
   at_or_below <- c(0, cw)[findInterval(grid + TICK_TOL, score[o]) + 1] / tot
@@ -41,7 +43,7 @@ pctl_to_T <- function(p, clamp = 1e-4) 50 + 10 * qnorm(pmin(pmax(p, clamp), 1 - 
 weighted_norms <- function(fr, s, inst, cells = cell_vars(inst),
                            probs = inst$uncertainty$probs,
                            clamp = inst$uncertainty$pctl_clamp,
-                           convention = inst$uncertainty$pctl_convention %||% "cumulative") {
+                           convention = inst$uncertainty$pctl_convention %||% "midpoint") {
   n_bad <- sum(is.na(fr$score) | is.na(fr$weight))
   if (n_bad > 0) stop("weighted_norms(): ", n_bad, " rows with NA score or weight.")
   grid <- s$grid
@@ -90,7 +92,7 @@ norms_all_cells <- function(fr, s, inst) {
 weighted_norms_continuous <- function(fr, s, inst, ages = inst$cells$ages,
                                       probs = inst$uncertainty$probs,
                                       clamp = inst$uncertainty$pctl_clamp,
-                                      convention = inst$uncertainty$pctl_convention %||% "cumulative") {
+                                      convention = inst$uncertainty$pctl_convention %||% "midpoint") {
   k <- inst$cells$kernel
   grid <- s$grid
   fr <- filter(fr, !is.na(.data$age))

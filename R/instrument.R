@@ -50,7 +50,7 @@ read_instrument <- function(path) {
     uncertainty = modifyList(
       list(prior_mass = 1, n_boot = 200, n_param_draws = 50, n_draws = 500,
            pctl_clamp = 1e-4, probs = c(.025, .975),
-           pctl_convention = "cumulative"),
+           pctl_convention = "midpoint"),
       cfg$uncertainty %||% list()),
     source = if (is.character(path)) normalizePath(path) else NA_character_
   ), class = "normpipe_instrument")

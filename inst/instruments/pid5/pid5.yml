@@ -565,6 +565,9 @@ uncertainty:
   prior_mass: 1
   n_boot: 200
   n_param_draws: 50
+  # Percentile ranks use the midpoint convention (the package default,
+  # P(X < x) + P(X = x) / 2). The tables of preprint v2 used the cumulative
+  # convention; set `pctl_convention: cumulative` to reproduce them.
 # Transfer module (M2): the 17 PID5BF+ facet doublets are the bridge
 # predictors (br_mean, the mean of the 34 bridge items, enters only the sigma
 # model), the donor sample enters as a fixed effect and the general-population

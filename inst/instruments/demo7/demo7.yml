@@ -57,6 +57,6 @@ uncertainty:
   prior_mass: 1
   n_boot: 100
   n_param_draws: 10
-  pctl_convention: cumulative   # or midpoint
+  pctl_convention: midpoint   # or cumulative (P(X <= x))
 measurement:
   engine: auto

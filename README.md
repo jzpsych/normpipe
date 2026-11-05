@@ -83,11 +83,12 @@ See `inst/instruments/demo7/demo7.yml` (small, all scale types) and
   models), `min_answered`, `observed`.
 - `cells`: `gender`, `age_breaks`, `ages`, `kernel`; `uncertainty`:
   `prior_mass`, `n_boot`, `n_param_draws`, `probs`, `pctl_clamp`,
-  `pctl_convention` (`cumulative` = P(X ≤ x), the default and the convention
-  of the PID-5, IPO-16 and LPFS-BF norms; `midpoint` = P(X < x) + ½ P(X = x),
-  the classical percentile rank, which keeps floor scores below T 50; chosen
-  by J. Zimmermann on 2026-11-05 as a switch so that the published norms stay
-  reproducible and a revision can move to midpoint); `measurement.engine`: `auto`,
+  `pctl_convention` (`midpoint`, the default: PR = P(X < x) + ½ P(X = x), the
+  classical percentile rank of Lienert & Raatz, whose mean over the norm
+  sample is exactly 50; `cumulative`: PR = P(X ≤ x), the convention of the
+  PID-5 preprint v2, IPO-16 and LPFS-BF tables, kept as an option to
+  reproduce them; decision J. Zimmermann 2026-11-05, the PID-5 manuscript
+  moves to midpoint in its revision); `measurement.engine`: `auto`,
   `mirt`, `internal`.
 
 ## Status (2026-11-04)

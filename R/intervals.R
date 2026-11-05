@@ -115,7 +115,7 @@ integrated_intervals <- function(blocks_fun, model_draws, s, fr, inst,
                                  sum_scores = NULL, probs = inst$uncertainty$probs,
                                  T_grid = seq(10, 90, by = 0.1),
                                  clamp = inst$uncertainty$pctl_clamp,
-                                 convention = inst$uncertainty$pctl_convention %||% "cumulative", ...) {
+                                 convention = inst$uncertainty$pctl_convention %||% "midpoint", ...) {
   n_param <- length(model_draws)
   sum_scores <- sum_scores %||% eap_sum_rows(s)
   draw_ids <- sort(unique(fr$.draw))

@@ -33,15 +33,15 @@
 #' Parses an instrument YAML file (or a list with the same structure), builds
 #' the item table, the reporting cells and every scale of every version
 #' (attainable scores, reporting grid, model), and fills in the defaults of
-#' the `uncertainty`, `measurement` and `transfer` blocks. The keys are
+#' the `uncertainty`, `measurement`, `transfer` and `weighting` blocks. The keys are
 #' documented in `vignette("instrument-config", package = "normpipe")`.
 #'
 #' @param path Path to the YAML file, or a list with the same structure.
 #' @return An object of class `normpipe_instrument`: a list with `id`, `name`,
 #'   `items` (item table: `item`, `col`, `categories`, `values` in integer
 #'   units, `reverse`, `K`; attribute `unit`), `versions` (each with its
-#'   `scales`), `cells`, `measurement`, `transfer`, `uncertainty` and
-#'   `source` (normalised path of the YAML file).
+#'   `scales`), `cells`, `measurement`, `transfer`, `weighting`,
+#'   `uncertainty` and `source` (normalised path of the YAML file).
 #' @seealso [scale_registry()], [get_scale()]
 #' @examples
 #' inst <- read_instrument(system.file("instruments/demo7/demo7.yml",
@@ -64,6 +64,8 @@ read_instrument <- function(path) {
                                   calibration = "reference"),
                              cfg$measurement %||% list()),
     transfer = modifyList(list(enabled = FALSE), cfg$transfer %||% list()),
+    weighting = modifyList(list(trim_quantile = 0.99, rerake = TRUE, incomplete = "drop"),
+                           cfg$weighting %||% list()),
     uncertainty = modifyList(
       list(prior_mass = 1, n_boot = 200, n_param_draws = 50, n_draws = 500,
            pctl_clamp = 1e-4, probs = c(.025, .975),

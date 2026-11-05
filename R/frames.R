@@ -148,7 +148,7 @@ prior_rows <- function(obs, s, inst, prior_mass) {
       mutate(age_group = cut(.data$age, inst$cells$age_breaks, right = FALSE)) %>%
       filter(!is.na(.data$age_group)) %>%
       add_count(.data$age_group, name = "n_ages")
-    rows <- inner_join(cells, age_tbl, by = "age_group")
+    rows <- inner_join(cells, age_tbl, by = "age_group", relationship = "many-to-many")
   } else {
     rows <- mutate(cells, age = NA_real_, n_ages = 1L)
   }

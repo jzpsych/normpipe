@@ -572,6 +572,16 @@ transfer:
   reference_level: respondi
   n_draws: 500
   adapt_delta: 0.95
+  # Likelihood follows the scale construction: item sums and item means are
+  # beta-binomial counts; the five PID-5 domains (means of facet means of
+  # unequal length, tabulated on the 0.01 grid) keep the censored normal.
+  family: beta_binomial
+  outcomes:
+    full_negative_affectivity: {family: gaussian}
+    full_detachment: {family: gaussian}
+    full_antagonism: {family: gaussian}
+    full_disinhibition: {family: gaussian}
+    full_psychoticism: {family: gaussian}
   # backend: cmdstanr when installed, otherwise rstan
   bridge:
     - {id: emo_lability, items: [62, 122]}

@@ -17,7 +17,8 @@
 #     ...
 #   formula: "{bridge} + s(age) + gender + sample"   # mean model (right-hand side)
 #   sigma: "br_mean + s(age)"                        # sigma model (right-hand side)
-#   family: gaussian | skew_normal                   # latent distribution
+#   family: gaussian | skew_normal | beta_binomial   # likelihood (see below)
+#   phi: "br_mean + s(age)"                          # precision model (beta_binomial)
 #   reference_level: quota       # first level of `sample` in the fit
 #   projection_level: quota      # level used for the projection; a donor
 #                                # sample or "average" [reference_level]
@@ -45,13 +46,25 @@
 #' regression fitted with brms. By default the bridge scores, `s(age)`,
 #' `gender` and `sample` predict the score with an interval-censored normal
 #' likelihood, and `sigma` depends on the mean bridge score and `s(age)`. The
-#' mean model, the sigma model and the latent distribution (`gaussian` or
-#' `skew_normal`) are configurable (`transfer$formula`, `transfer$sigma`,
-#' `transfer$family`, per outcome under `transfer$outcomes`), e.g.
+#' mean model, the sigma model and the likelihood family are configurable
+#' (`transfer$formula`, `transfer$sigma`, `transfer$family`, per outcome
+#' under `transfer$outcomes`), e.g.
 #' `"{bridge} + s(age, by = gender) + gender + sample"` for gender-specific
-#' age trajectories; `{bridge}` stands for the bridge predictors. The
-#' posterior predictive draws for every reference respondent, snapped to the
-#' attainable scores, form the draw frame of the scale. [run_norming()] runs
+#' age trajectories; `{bridge}` stands for the bridge predictors.
+#'
+#' Families: `gaussian` (default) and `skew_normal` model the score as
+#' interval-censored on a latent continuous scale, with `sigma` (and, for
+#' the skew normal, `alpha`) as distributional parameters. `beta_binomial`
+#' models the summed score in integer units directly,
+#' `sum | trials(max sum) ~ ...` with a logit link on the mean and the
+#' precision `phi` modelled by `transfer$phi` (default: the sigma formula).
+#' It needs no censoring, predicts on the attainable scores and has the
+#' sign-changing skewness of a bounded scale built in (right-skewed near the
+#' floor, left-skewed near the ceiling). It is available for scales whose
+#' attainable scores form an arithmetic sequence (`sum`, `mean`, and
+#' `mean_of_means` with equal component lengths), not for dense scales.
+#' The posterior predictive draws for every reference respondent, snapped to
+#' the attainable scores, form the draw frame of the scale. [run_norming()] runs
 #' these steps in stage `M2`; the donor samples are supplied as
 #' `inst$donors_data <- list(meta, items)` with a column `meta$sample`.
 #'
@@ -89,21 +102,24 @@ bridge_scores <- function(items_df, inst) {
 #'
 #' @param inst Instrument ([read_instrument()]).
 #' @param outcome Outcome name (`<version>_<scale>`).
-#' @return List with `formula`, `sigma`, `family`, `exclude`, `adapt_delta`,
-#'   `max_treedepth`, `chains`, `iter`, `prior_b`.
+#' @return List with `formula`, `sigma`, `phi`, `family`, `exclude`,
+#'   `adapt_delta`, `max_treedepth`, `chains`, `iter`, `prior_b`.
 #' @export
 transfer_spec <- function(inst, outcome) {
   tr <- inst$transfer %||% list()
   def <- list(formula = "{bridge} + s(age) + gender + sample",
-              sigma = "br_mean + s(age)",
+              sigma = "br_mean + s(age)", phi = NULL,
               family = "gaussian",
               adapt_delta = 0.95, max_treedepth = 10,
-              chains = 4, iter = 2000, prior_b = "normal(0, 1)")
+              chains = 4, iter = 2000, prior_b = NULL)
   top <- tr[intersect(names(def), names(tr))]
   spec <- modifyList(def, top)
   ov <- tr$outcomes[[outcome]]
   if (!is.null(ov)) spec <- modifyList(spec, ov)
-  spec$family <- match.arg(spec$family, c("gaussian", "skew_normal"))
+  spec$family <- match.arg(spec$family, c("gaussian", "skew_normal", "beta_binomial"))
+  spec$phi <- spec$phi %||% spec$sigma
+  # regression coefficients: the logit scale of the beta-binomial needs a wider prior
+  spec$prior_b <- spec$prior_b %||% if (spec$family == "beta_binomial") "normal(0, 1.5)" else "normal(0, 1)"
   excl <- ov$exclude %||% tr$exclude[[outcome]]
   if (is.null(excl) && outcome %in% unlist(tr$crosscheck))
     excl <- own_bridge(inst, outcome)
@@ -139,8 +155,10 @@ expand_rhs <- function(rhs, preds) {
 #' @param formula,sigma Right-hand sides of the mean and the sigma model;
 #'   `{bridge}` in `formula` stands for the bridge predictors. Default from
 #'   [transfer_spec()].
-#' @param family `"gaussian"` or `"skew_normal"` (the latent distribution of
-#'   the interval-censored likelihood).
+#' @param family `"gaussian"`, `"skew_normal"` (latent distribution of the
+#'   interval-censored likelihood) or `"beta_binomial"` (summed score).
+#' @param phi Right-hand side of the precision model of the beta-binomial;
+#'   default from [transfer_spec()].
 #' @param adapt_delta,max_treedepth Sampler settings passed to brms.
 #' @param file Optional file path for caching the brms fit.
 #' @param ... Further arguments passed to [brms::brm()] (e.g. `chains`,
@@ -148,7 +166,7 @@ expand_rhs <- function(rhs, preds) {
 #' @return `fit_transfer()`: a `brmsfit`.
 #' @export
 fit_transfer <- function(outcome, dat, s, inst, exclude = NULL,
-                         formula = NULL, sigma = NULL, family = NULL,
+                         formula = NULL, sigma = NULL, family = NULL, phi = NULL,
                          adapt_delta = NULL, max_treedepth = NULL,
                          file = NULL, ...) {
   if (!requireNamespace("brms", quietly = TRUE)) stop("brms is not installed.")
@@ -156,7 +174,8 @@ fit_transfer <- function(outcome, dat, s, inst, exclude = NULL,
   exclude <- exclude %||% spec$exclude
   formula <- formula %||% spec$formula
   sigma <- sigma %||% spec$sigma
-  family <- match.arg(family %||% spec$family, c("gaussian", "skew_normal"))
+  phi <- phi %||% spec$phi
+  family <- match.arg(family %||% spec$family, c("gaussian", "skew_normal", "beta_binomial"))
   adapt_delta <- adapt_delta %||% spec$adapt_delta
   max_treedepth <- max_treedepth %||% spec$max_treedepth
   preds <- setdiff(grep("^br_", names(dat), value = TRUE), c("br_mean", paste0("br_", exclude)))
@@ -173,17 +192,27 @@ fit_transfer <- function(outcome, dat, s, inst, exclude = NULL,
                                .data$cens_ind == "right" ~ hi - h / 2,
                                TRUE ~ y - h / 2),
            cens_hi = case_when(.data$cens_ind == "interval" ~ y + h / 2, TRUE ~ .data$cens_lo))
-  f <- brms::bf(stats::as.formula(paste0("cens_lo | cens(cens_ind, cens_hi) ~ ",
-                                         expand_rhs(formula, preds))),
-                stats::as.formula(paste0("sigma ~ ", sigma)))
-  fam <- switch(family, gaussian = stats::gaussian(), skew_normal = brms::skew_normal())
-  # Initial values: the intercepts start at the location and log scale of the
-  # outcome (other parameters random). Without them, the censored likelihood
-  # of an outcome far from zero (e.g. a sum score) can be -Inf at every random
-  # initial value, notably for the skew normal, whose lcdf underflows early.
-  y_mid <- (dat$cens_lo + dat$cens_hi) / 2
-  init_fun <- function() list(Intercept = mean(y_mid, na.rm = TRUE) + stats::rnorm(1, 0, 0.05),
-                              Intercept_sigma = log(stats::sd(y_mid, na.rm = TRUE)) + stats::rnorm(1, 0, 0.05))
+  rhs <- expand_rhs(formula, preds)
+  if (family == "beta_binomial") {
+    bb <- bb_scale(s)
+    dat$y_sum <- as.integer(round(y / bb$unit_per_sum)) - bb$offset
+    dat$y_trials <- bb$trials
+    f <- brms::bf(stats::as.formula(paste0("y_sum | trials(y_trials) ~ ", rhs)),
+                  stats::as.formula(paste0("phi ~ ", phi)))
+    fam <- brms::beta_binomial()
+    init_fun <- NULL
+  } else {
+    f <- brms::bf(stats::as.formula(paste0("cens_lo | cens(cens_ind, cens_hi) ~ ", rhs)),
+                  stats::as.formula(paste0("sigma ~ ", sigma)))
+    fam <- switch(family, gaussian = stats::gaussian(), skew_normal = brms::skew_normal())
+    # Initial values: the intercepts start at the location and log scale of the
+    # outcome (other parameters random). Without them, the censored likelihood
+    # of an outcome far from zero (e.g. a sum score) can be -Inf at every random
+    # initial value, notably for the skew normal, whose lcdf underflows early.
+    y_mid <- (dat$cens_lo + dat$cens_hi) / 2
+    init_fun <- function() list(Intercept = mean(y_mid, na.rm = TRUE) + stats::rnorm(1, 0, 0.05),
+                                Intercept_sigma = log(stats::sd(y_mid, na.rm = TRUE)) + stats::rnorm(1, 0, 0.05))
+  }
   dots <- list(...)
   args <- c(list(formula = f, data = dat, family = fam,
                  prior = brms::set_prior(spec$prior_b, class = "b"),
@@ -193,7 +222,8 @@ fit_transfer <- function(outcome, dat, s, inst, exclude = NULL,
                        !is.null(tryCatch(cmdstanr::cmdstan_version(error_on_NA = FALSE),
                                          error = function(e) NULL))) "cmdstanr" else "rstan",
                  control = list(adapt_delta = adapt_delta, max_treedepth = max_treedepth),
-                 init = init_fun, file = file),
+                 file = file),
+            if (!is.null(init_fun)) list(init = init_fun),
             dots)
   args <- args[!duplicated(names(args), fromLast = TRUE)]
   do.call(brms::brm, args)
@@ -217,6 +247,8 @@ project_outcome <- function(fit, pred_frame, s, n_draws = 500, level = NULL,
                             bootstrap_weights = FALSE) {
   if (!requireNamespace("brms", quietly = TRUE)) stop("brms is not installed.")
   lv_all <- levels(fit$data$sample) %||% unique(as.character(fit$data$sample))
+  is_bb <- stats::family(fit)$family == "beta_binomial"
+  if (is_bb) { bb <- bb_scale(s); pred_frame$y_trials <- bb$trials }
   if (identical(level, "average")) {
     pp <- predict_average_level(fit, pred_frame, n_draws, lv_all)
   } else {
@@ -227,6 +259,7 @@ project_outcome <- function(fit, pred_frame, s, n_draws = 500, level = NULL,
     }
     pp <- brms::posterior_predict(fit, newdata = pred_frame, ndraws = n_draws)  # draws x persons
   }
+  if (is_bb) pp <- (pp + bb$offset) * bb$unit_per_sum       # summed units -> raw metric
   draws_to_frame(pp, pred_frame, s, bootstrap_weights)
 }
 
@@ -263,8 +296,16 @@ predict_average_level <- function(fit, pred_frame, n_draws, levels) {
     brms::posterior_linpred(fit, newdata = nd, dpar = "mu", draw_ids = ids)
   })) / length(levels)
   nd <- pred_frame; nd$sample <- factor(levels[1], levels = levels)
-  sig <- brms::posterior_linpred(fit, newdata = nd, dpar = "sigma", transform = TRUE, draw_ids = ids)
   fam <- stats::family(fit)$family
+  sig <- if (fam != "beta_binomial")
+    brms::posterior_linpred(fit, newdata = nd, dpar = "sigma", transform = TRUE, draw_ids = ids)
+  if (fam == "beta_binomial") {
+    mu <- stats::plogis(mu)
+    phi <- brms::posterior_linpred(fit, newdata = nd, dpar = "phi", transform = TRUE, draw_ids = ids)
+    if (!requireNamespace("extraDistr", quietly = TRUE)) stop("extraDistr is not installed.")
+    out <- extraDistr::rbbinom(length(mu), size = pred_frame$y_trials[1], alpha = mu * phi, beta = (1 - mu) * phi)
+    return(matrix(out, nrow(mu), ncol(mu)))
+  }
   if (fam == "gaussian") {
     out <- stats::rnorm(length(mu), mu, sig)
   } else if (fam == "skew_normal") {
@@ -356,4 +397,32 @@ crosscheck_table <- function(direct, lodo) {
     select(-"raw_key") %>%
     mutate(dT = .data$T_lodo - .data$T_direct,
            inside = .data$T_lodo >= .data$T_lo_direct & .data$T_lodo <= .data$T_hi_direct)
+}
+
+#' Summed-score representation of a scale for the beta-binomial family
+#'
+#' The attainable raw scores must form an arithmetic sequence: the summed
+#' score in integer units is `raw / unit_per_sum`, the trials of the
+#' beta-binomial are the range of the attainable sums, and `offset` is the
+#' smallest attainable sum (non-zero when item values do not start at 0).
+#'
+#' A dense scale (mean of facet means of unequal length, tabulated on a
+#' reporting grid) has no count structure: modelled as a count out of the
+#' grid steps, the beta-binomial loses the floor and widens the upper tail
+#' (PID-5 domain pilot, 2026-11). Such scales keep the censored families.
+#' @noRd
+bb_scale <- function(s) {
+  if (isTRUE(s$dense))
+    stop("Scale '", s$version, "_", s$id, "': a dense scale (mean of means of unequal ",
+         "length, tabulated on the reporting grid) has no count structure; use ",
+         "family 'gaussian' or 'skew_normal' for it (transfer$outcomes).")
+  if (!isTRUE(all.equal(diff(s$grid), rep(s$step, length(s$grid) - 1))))
+    stop("Scale '", s$version, "_", s$id, "': the beta-binomial family needs an ",
+         "arithmetic sequence of attainable scores (sum, mean, or mean_of_means ",
+         "with equal component lengths).")
+  lo <- min(s$sums); hi <- max(s$sums)
+  if (!isTRUE(all.equal(sort(unique(s$sums)), lo:hi)))
+    stop("Scale '", s$version, "_", s$id, "': the attainable sums have gaps; ",
+         "the beta-binomial family is not available.")
+  list(unit_per_sum = s$step, offset = as.integer(lo), trials = as.integer(hi - lo))
 }

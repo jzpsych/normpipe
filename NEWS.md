@@ -1,3 +1,9 @@
+# normpipe 0.2.1
+
+* `direct_frame()` coerces respondent ids to character, so that numeric ids
+  (e.g. GESIS panelist ids) can be combined with the character ids of the
+  Dirichlet prior rows (this failed in `bind_rows()` before).
+
 # normpipe 0.2.0
 
 ## Transfer module

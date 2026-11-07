@@ -559,7 +559,7 @@ cells:
   kernel: {half_width0: 4, min_neff: 150, max_half_width: 12}
 uncertainty:
   prior_mass: 1
-  n_boot: 200
+  n_boot: 1000
   n_param_draws: 50
   # pctl_convention: midpoint (default) or cumulative
 # Transfer module (M2): the 17 PID5BF+ facet doublets are the bridge

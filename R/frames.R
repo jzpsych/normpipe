@@ -78,7 +78,7 @@ direct_frame <- function(ref, s, inst, n_boot = 0L,
   stopifnot(all(c("id", "weight", "score") %in% names(ref)))
   obs <- ref %>%
     filter(!is.na(.data$score), !is.na(.data$weight)) %>%
-    transmute(id = .data$id,
+    transmute(id = as.character(.data$id),   # prior rows carry character ids
               age = if ("age" %in% names(ref)) .data$age else NA_real_,
               gender = if ("gender" %in% names(ref)) as.character(.data$gender) else NA_character_,
               weight = .data$weight,

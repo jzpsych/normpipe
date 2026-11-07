@@ -1,3 +1,12 @@
+# normpipe 0.2.1
+
+* `direct_frame()` coerces respondent ids to character, so that numeric ids
+  (e.g. GESIS panelist ids) can be combined with the character ids of the
+  Dirichlet prior rows (this failed in `bind_rows()` before).
+* PID-5 instrument: `n_boot` raised from 200 to 1000. With 200 draws the
+  Monte Carlo error of the point norm reached 1 to 2 T in the sparse tails
+  of the directly observed scales.
+
 # normpipe 0.2.0
 
 ## Transfer module

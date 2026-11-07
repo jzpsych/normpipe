@@ -113,3 +113,12 @@ test_that("midpoint percentile ranks sit half a score mass below the cumulative 
   nm_cum <- weighted_norms(fr, s, inst, cells = character(0), convention = "cumulative")
   expect_true(all(nm_mid$pctl_med <= nm_cum$pctl_med + 1e-12))
 })
+
+test_that("numeric respondent ids work with the Dirichlet prior", {
+  inst <- demo_inst(); s <- get_scale(inst, "full_a")
+  sim <- simulate_reference(inst, N = 100, seed = 3); sc <- score_scales(sim$items, inst)
+  ref <- dplyr::mutate(sim$meta, id = seq_len(dplyr::n()), score = sc$full_a)
+  fr <- direct_frame(ref, s, inst, n_boot = 2, prior_mass = 1)
+  expect_type(fr$id, "character")
+  expect_true(all(c("1", "100") %in% fr$id))
+})

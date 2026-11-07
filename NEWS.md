@@ -1,3 +1,30 @@
+# normpipe 0.2.2
+
+## Beta-binomial transfer models
+
+* `transfer$family: beta_binomial` models the summed score of an outcome as
+  a count out of its attainable range (`y_sum | trials(y_trials)`), with a
+  logit mean model (`transfer$formula`) and a precision model
+  (`transfer$phi`, default: the sigma model). It replaces the
+  interval-censored normal for bounded scales: the residual skew of a bounded
+  scale changes sign with severity, which a latent normal or skew normal
+  with constant shape cannot represent. In the PID-5 donor pilot the
+  beta-binomial improved the expected log predictive density of the long
+  facets by 30 to 240 points, matched the floor shares and the upper
+  quantiles of the donors within one summed point, and ran as fast as the
+  censored model.
+* The family needs a count structure (sum or mean of items, or means of
+  equally long components). A dense scale (mean of facet means of unequal
+  length, tabulated on the reporting grid, e.g. the PID-5 domains) keeps
+  the censored normal via a per-outcome `family: gaussian`: modelled as a
+  count out of the grid steps the beta-binomial loses the floor and widens
+  the upper tail (PID-5 domain pilot).
+* `project_outcome()` converts the predicted counts back to the raw metric;
+  `projection_level = "average"` draws from the beta-binomial via
+  `extraDistr::rbbinom()` (new in Suggests).
+* `transfer_spec()` returns `phi`, and the default `prior_b` is
+  `normal(0, 1.5)` for the beta-binomial (logit scale).
+
 # normpipe 0.2.1
 
 * `direct_frame()` coerces respondent ids to character, so that numeric ids

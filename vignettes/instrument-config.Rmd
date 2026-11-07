@@ -170,17 +170,18 @@ did not answer all items of some scales.
 | `bridge` | list of bridge predictors `{id, items}`: item sets answered by the reference sample and the donor samples; each enters as its mean item value |
 | `formula` | right-hand side of the mean model; `{bridge}` stands for the bridge predictors [`"{bridge} + s(age) + gender + sample"`]; e.g. `"{bridge} + s(age, by = gender) + gender + sample"` for gender-specific age trajectories |
 | `sigma` | right-hand side of the sigma model [`"br_mean + s(age)"`] |
-| `family` | latent distribution of the interval-censored likelihood: `gaussian` or `skew_normal` [`gaussian`] |
+| `family` | likelihood of the transfer model [`gaussian`]: `gaussian` or `skew_normal` are latent distributions of an interval-censored likelihood on the attainable scores; `beta_binomial` models the summed score as a count out of the attainable range, with a logit mean model and a precision model `phi` (not for dense scales, which keep a censored family via `outcomes`) |
+| `phi` | right-hand side of the precision model of the beta-binomial [same as `sigma`] |
 | `reference_level` | donor sample used as the reference level of `sample` in the fit [first level of `meta$sample`] |
 | `projection_level` | level of `sample` at which the reference sample is projected: a donor sample, or `average` (mean of the sample effects) [`reference_level`] |
 | `bootstrap_weights` | Bayesian bootstrap of the reference weights in every posterior draw, so that the norm band also reflects the sampling error of the reference sample [true] |
 | `exclude` | per outcome, bridge ids left out of the predictors, e.g. `{full_x: [a2]}` |
 | `crosscheck` | directly observed outcomes that are additionally projected without their own bridge items (leave-own-domain-out); results in `c1_crosscheck.csv` |
-| `outcomes` | per-outcome overrides of `formula`, `sigma`, `family`, `exclude`, `adapt_delta`, `max_treedepth`, `chains`, `iter`, `prior_b` |
+| `outcomes` | per-outcome overrides of `formula`, `sigma`, `phi`, `family`, `exclude`, `adapt_delta`, `max_treedepth`, `chains`, `iter`, `prior_b` |
 | `n_draws` | posterior predictive draws per reference respondent [500] |
 | `adapt_delta`, `max_treedepth` | sampler settings passed to brms [0.95, 10] |
 | `chains`, `iter` | number of chains and iterations per chain [4, 2000] |
-| `prior_b` | prior of the regression coefficients of the mean model [`normal(0, 1)`] |
+| `prior_b` | prior of the regression coefficients of the mean model [`normal(0, 1)`; `normal(0, 1.5)` on the logit scale of the beta-binomial] |
 | `backend` | `cmdstanr` or `rstan` [cmdstanr when CmdStan is installed, otherwise rstan] |
 
 The donor samples are attached to the instrument object before calling

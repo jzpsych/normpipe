@@ -84,3 +84,20 @@ test_that("the cross-check table pairs direct and projected norms by cell and sc
   expect_equal(nrow(cc), nrow(nm$cells) + nrow(nm$overall))
   expect_true(all(cc$dT == 0) && all(cc$inside))
 })
+
+test_that("the beta-binomial summed-score representation follows the scale", {
+  inst <- demo_transfer()
+  a <- bb_scale(get_scale(inst, "full_a"))       # 4 items, values 0..6, item mean
+  expect_equal(a$trials, 24L); expect_equal(a$offset, 0L); expect_equal(a$unit_per_sum, 0.25)
+  b <- bb_scale(get_scale(inst, "full_b"))       # sum score
+  expect_equal(b$trials, 24L); expect_equal(b$unit_per_sum, 1)
+  expect_equal(bb_scale(get_scale(inst, "full_ab"))$trials, 48L)   # equal component lengths
+  dense <- get_scale(read_instrument(system.file("instruments/pid5/pid5.yml", package = "normpipe")),
+                     "full_negative_affectivity")
+  expect_error(bb_scale(dense), "count structure")
+  sp <- transfer_spec(inst, "full_a")
+  expect_equal(sp$prior_b, "normal(0, 1)"); expect_equal(sp$phi, sp$sigma)
+  inst$transfer$family <- "beta_binomial"; inst$transfer$phi <- "br_mean"
+  sp <- transfer_spec(inst, "full_a")
+  expect_equal(sp$prior_b, "normal(0, 1.5)"); expect_equal(sp$phi, "br_mean")
+})

@@ -103,26 +103,50 @@ test_that("the beta-binomial summed-score representation follows the scale", {
   expect_equal(sp$prior_b_phi, "normal(0, 2.5)")
 })
 
-test_that("the beta-binomial models only the outcome items not observed in the bridge", {
+test_that("observed bridge items are not predicted but added (all families)", {
   inst <- demo_transfer()
-  s <- get_scale(inst, "full_a")                      # items 1-4, bridge a2 = items 1, 2
-  expect_equal(bb_known_items(s, inst), c(1L, 2L))
-  expect_length(bb_known_items(s, inst, exclude = "a2"), 0)
-  ki <- known_info(inst, c(1L, 2L))
-  expect_equal(ki$range, c(min = 0, max = 12)); expect_equal(unname(ki$pair), c("a2", "a2"))
-  bb <- bb_scale(s, known = c(1L, 2L), values = ki$range)
-  expect_equal(bb$trials, 12L); expect_equal(bb$offset, 0L)
-  expect_error(bb_scale(get_scale(inst, "short_a"), known = c(1L, 2L), values = ki$range),
-               "all items are bridge items")
-  # bridge_scores() carries the single bridge items; a missing one is imputed
-  # from its bridge pair in the projection
+  s <- get_scale(inst, "full_a")                      # items 1-4 (values 0..6, mean), bridge a2 = items 1, 2
+  expect_equal(observed_items(s, inst), c(1L, 2L))
+  expect_length(observed_items(s, inst, exclude = "a2"), 0)
+  # weights of the item values in the raw score
+  expect_equal(unname(item_weights(s, inst)), rep(1 / 4, 4))
+  expect_equal(unname(item_weights(get_scale(inst, "full_b"), inst)), rep(1, 4))
+  expect_equal(unname(item_weights(get_scale(inst, "full_ab"), inst)), rep(1 / 8, 8))
   set.seed(3)
-  it <- as.data.frame(matrix(sample(1:7, 40, TRUE), 5, 8, dimnames = list(NULL, paste0("it", 1:8))))
-  it$it1[2] <- NA
+  it <- as.data.frame(matrix(sample(1:7, 400, TRUE), 50, 8, dimnames = list(NULL, paste0("it", 1:8))))
   bs <- bridge_scores(it, inst)
   expect_true(all(c("bi_1", "bi_2", "bi_5", "bi_6") %in% names(bs)))
-  expect_true(is.na(known_sum(bs, c(1L, 2L))[2]))
-  imp <- known_sum(bs, c(1L, 2L), info = ki)
-  expect_equal(imp[2], 2 * bs$bi_2[2])
-  expect_equal(imp[-2], (bs$bi_1 + bs$bi_2)[-2])
+  info <- observed_info(s, inst, c(1L, 2L), bs)
+  expect_equal(info$range_units, c(min = 0, max = 12))
+  expect_equal(info$rest, c(min = 0, max = 3))           # items 3, 4: (0..6 + 0..6) / 4
+  bb <- bb_scale(s, known = c(1L, 2L), values = info$range_units)
+  expect_equal(bb$trials, 12L); expect_equal(bb$offset, 0L)
+  expect_error(bb_scale(get_scale(inst, "short_a"), known = c(1L, 2L), values = info$range_units),
+               "all items are bridge items")
+  # observed part: raw contribution of items 1 and 2 to the scale mean
+  sc <- score_scales(it, inst)
+  op <- observed_part(bs, info)
+  expect_equal(op, (bs$bi_1 + bs$bi_2) / 4)
+  expect_true(all(sc$full_a - op >= info$rest[["min"]] - 1e-9 & sc$full_a - op <= info$rest[["max"]] + 1e-9))
+  # a skipped observed item is drawn anew in every draw from its distribution
+  # given the other item of the pair; answered items stay fixed
+  bs2 <- bs; bs2$bi_1[1] <- NA
+  m <- observed_part(bs2, info, D = 200)
+  expect_equal(dim(m), c(200, 50))
+  expect_true(all(m[, -1] == matrix(op[-1], 200, 49, byrow = TRUE)))
+  expect_gt(length(unique(m[, 1])), 1)
+  expect_true(all(round((m[, 1] - bs2$bi_2[1] / 4) * 4, 8) %in% 0:6))
+})
+
+test_that("extra priors replace defaults of the same class and dpar; init is checked", {
+  inst <- demo_transfer()
+  inst$transfer$priors <- list(list(prior = "normal(0, 0.5)", class = "b", dpar = "sigma"),
+                               list(prior = "normal(0, 2)", class = "b"))
+  pr <- transfer_priors(transfer_spec(inst, "full_a"), "gaussian")
+  expect_equal(nrow(pr), 2)
+  expect_equal(pr$prior[pr$dpar == ""], "normal(0, 2)")
+  inst$transfer$init <- "x"
+  expect_error(transfer_spec(inst, "full_a"), "random")
+  inst$transfer$init <- 0
+  expect_equal(transfer_spec(inst, "full_a")$init, 0)
 })

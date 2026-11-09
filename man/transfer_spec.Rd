@@ -12,8 +12,10 @@ transfer_spec(inst, outcome)
 \item{outcome}{Outcome name (`<version>_<scale>`).}
 }
 \value{
-List with `formula`, `sigma`, `family`, `exclude`, `adapt_delta`,
-  `max_treedepth`, `chains`, `iter`, `prior_b`.
+List with `formula`, `sigma`, `phi`, `family`, `exclude`,
+  `adapt_delta`, `max_treedepth`, `chains`, `iter`, `prior_b`,
+  `prior_b_phi`, `priors` (further priors as `{prior, class, dpar, coef}`)
+  and `init` (`NULL` = family default, `"random"` or 0).
 }
 \description{
 Merges the defaults, the `transfer` block of the instrument and the

@@ -1,3 +1,26 @@
+# normpipe 0.2.4
+
+* Observed bridge items are no longer predicted in any family. 0.2.3 applied
+  this to the beta-binomial only; the censored families (`gaussian`,
+  `skew_normal`) now also model the outcome minus its weighted observed items
+  (censored at the attainable range of that rest), and `project_outcome()`
+  adds the observed part to every draw. Before, the censored domain models
+  predicted the full score, so items predicted themselves and 0.3-1.3 % of
+  the PID-5 domain draws fell below the respondent's own observed part.
+  Item weights follow the scale metric (`sum`, `mean`, `mean_of_means`).
+  The rule is fixed and has no switch.
+* An observed item the respondent skipped is no longer set to the value of
+  its bridge predictor: it is drawn in every posterior draw from its
+  distribution in the donor samples given the answered item of the pair
+  (smoothed; marginal distribution when the partner is missing too), so the
+  imputation uncertainty enters the norm band.
+* New `transfer` keys (global or per outcome): `priors`, a list of further
+  brms priors `{prior, class, dpar, coef}` that replace defaults of the same
+  class/dpar/coef, and `init` (`random` or `0`; left out: family default).
+* Fits record the observed-item information in `fit$normpipe`; censored fits
+  cached by 0.2.3 or earlier keep their full-score meaning but should be
+  refitted.
+
 # normpipe 0.2.3
 
 * Beta-binomial transfer models no longer model the bridge items an outcome

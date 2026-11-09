@@ -1,7 +1,7 @@
 Package: normpipe
 Type: Package
 Title: Population-Referenced Norms with Two Layers of Uncertainty for Any Questionnaire
-Version: 0.2.2
+Version: 0.2.3
 Authors@R: c(
     person("Johannes", "Zimmermann", email = "jz@uni-kassel.de",
            role = c("aut", "cre")))

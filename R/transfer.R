@@ -89,6 +89,9 @@ bridge_scores <- function(items_df, inst) {
   }), paste0("br_", map_chr(br, "id"))))
   all_items <- unique(unlist(map(br, "items")))
   out$br_mean <- rowMeans(as.matrix(vals[inst$items$col[match(all_items, inst$items$item)]]), na.rm = TRUE) * unit
+  # single bridge items (scored, integer units): the beta-binomial adds the
+  # bridge items an outcome contains as known values (see fit_transfer())
+  for (it in all_items) out[[paste0("bi_", it)]] <- vals[[inst$items$col[match(it, inst$items$item)]]]
   out
 }
 
@@ -111,7 +114,7 @@ transfer_spec <- function(inst, outcome) {
               sigma = "br_mean + s(age)", phi = NULL,
               family = "gaussian",
               adapt_delta = 0.95, max_treedepth = 10,
-              chains = 4, iter = 2000, prior_b = NULL)
+              chains = 4, iter = 2000, prior_b = NULL, prior_b_phi = NULL)
   top <- tr[intersect(names(def), names(tr))]
   spec <- modifyList(def, top)
   ov <- tr$outcomes[[outcome]]
@@ -120,6 +123,8 @@ transfer_spec <- function(inst, outcome) {
   spec$phi <- spec$phi %||% spec$sigma
   # regression coefficients: the logit scale of the beta-binomial needs a wider prior
   spec$prior_b <- spec$prior_b %||% if (spec$family == "beta_binomial") "normal(0, 1.5)" else "normal(0, 1)"
+  # coefficients of the log precision of the beta-binomial (brms default: flat)
+  spec$prior_b_phi <- spec$prior_b_phi %||% "normal(0, 2.5)"
   excl <- ov$exclude %||% tr$exclude[[outcome]]
   if (is.null(excl) && outcome %in% unlist(tr$crosscheck))
     excl <- own_bridge(inst, outcome)
@@ -194,13 +199,28 @@ fit_transfer <- function(outcome, dat, s, inst, exclude = NULL,
            cens_hi = case_when(.data$cens_ind == "interval" ~ y + h / 2, TRUE ~ .data$cens_lo))
   rhs <- expand_rhs(formula, preds)
   if (family == "beta_binomial") {
-    bb <- bb_scale(s)
-    dat$y_sum <- as.integer(round(y / bb$unit_per_sum)) - bb$offset
+    # The bridge items that belong to the outcome are observed in the
+    # reference sample: only the sum of the outcome's other items is modelled,
+    # and the observed items are added back in project_outcome(). Modelling the
+    # full sum would ask a beta-binomial (which can only be overdispersed
+    # relative to the binomial) to fit a conditional distribution that is
+    # underdispersed, because part of the sum is known exactly; phi then
+    # drifts to infinity and the sampler does not converge.
+    known <- bb_known_items(s, inst, exclude)
+    kinfo <- known_info(inst, known)
+    bb <- bb_scale(s, known = known, values = kinfo$range)
+    kn <- known_sum(dat, known)
+    dat$y_sum <- as.integer(round(y / bb$unit_per_sum)) - kn - bb$offset
     dat$y_trials <- bb$trials
     f <- brms::bf(stats::as.formula(paste0("y_sum | trials(y_trials) ~ ", rhs)),
                   stats::as.formula(paste0("phi ~ ", phi)))
     fam <- brms::beta_binomial()
-    init_fun <- NULL
+    # All parameters start at zero on the unconstrained scale (phi = 1, mean at
+    # the logit of 0.5 for centred predictors). From the default random values
+    # a chain can start on the plateau of large phi, where the likelihood is
+    # flat in phi, and never leave it (every iteration at the maximum tree
+    # depth); see also the proper prior on the phi coefficients below.
+    init_fun <- 0
   } else {
     f <- brms::bf(stats::as.formula(paste0("cens_lo | cens(cens_ind, cens_hi) ~ ", rhs)),
                   stats::as.formula(paste0("sigma ~ ", sigma)))
@@ -215,7 +235,9 @@ fit_transfer <- function(outcome, dat, s, inst, exclude = NULL,
   }
   dots <- list(...)
   args <- c(list(formula = f, data = dat, family = fam,
-                 prior = brms::set_prior(spec$prior_b, class = "b"),
+                 prior = c(brms::set_prior(spec$prior_b, class = "b"),
+                           if (family == "beta_binomial")
+                             brms::set_prior(spec$prior_b_phi, class = "b", dpar = "phi")),
                  chains = spec$chains, cores = min(spec$chains, 4), iter = spec$iter,
                  backend = inst$transfer$backend %||%
                    if (requireNamespace("cmdstanr", quietly = TRUE) &&
@@ -226,7 +248,16 @@ fit_transfer <- function(outcome, dat, s, inst, exclude = NULL,
             if (!is.null(init_fun)) list(init = init_fun),
             dots)
   args <- args[!duplicated(names(args), fromLast = TRUE)]
-  do.call(brms::brm, args)
+  rds <- if (!is.null(file)) { if (grepl("\\.rds$", file)) file else paste0(file, ".rds") }
+  cached <- !is.null(rds) && file.exists(rds)
+  fit <- do.call(brms::brm, args)
+  # record the observed items with a new fit (a cached fit of normpipe 0.2.2
+  # modelled the full sum and keeps that meaning)
+  if (family == "beta_binomial" && !cached) {
+    fit$normpipe <- c(list(known_items = known), kinfo)
+    if (!is.null(rds)) saveRDS(fit, rds)
+  }
+  fit
 }
 
 #' @rdname bridge_scores
@@ -248,7 +279,12 @@ project_outcome <- function(fit, pred_frame, s, n_draws = 500, level = NULL,
   if (!requireNamespace("brms", quietly = TRUE)) stop("brms is not installed.")
   lv_all <- levels(fit$data$sample) %||% unique(as.character(fit$data$sample))
   is_bb <- stats::family(fit)$family == "beta_binomial"
-  if (is_bb) { bb <- bb_scale(s); pred_frame$y_trials <- bb$trials }
+  if (is_bb) {
+    known <- fit$normpipe$known_items       # NULL for fits of normpipe 0.2.2
+    bb <- bb_scale(s, known = known, values = fit$normpipe$range)
+    pred_frame$y_trials <- bb$trials
+    kn <- known_sum(pred_frame, known, info = fit$normpipe)
+  }
   if (identical(level, "average")) {
     pp <- predict_average_level(fit, pred_frame, n_draws, lv_all)
   } else {
@@ -259,7 +295,7 @@ project_outcome <- function(fit, pred_frame, s, n_draws = 500, level = NULL,
     }
     pp <- brms::posterior_predict(fit, newdata = pred_frame, ndraws = n_draws)  # draws x persons
   }
-  if (is_bb) pp <- (pp + bb$offset) * bb$unit_per_sum       # summed units -> raw metric
+  if (is_bb) pp <- (sweep(pp, 2, kn, `+`) + bb$offset) * bb$unit_per_sum   # + observed items, summed units -> raw
   draws_to_frame(pp, pred_frame, s, bootstrap_weights)
 }
 
@@ -411,7 +447,7 @@ crosscheck_table <- function(direct, lodo) {
 #' grid steps, the beta-binomial loses the floor and widens the upper tail
 #' (PID-5 domain pilot, 2026-11). Such scales keep the censored families.
 #' @noRd
-bb_scale <- function(s) {
+bb_scale <- function(s, known = NULL, values = NULL) {
   if (isTRUE(s$dense))
     stop("Scale '", s$version, "_", s$id, "': a dense scale (mean of means of unequal ",
          "length, tabulated on the reporting grid) has no count structure; use ",
@@ -424,5 +460,53 @@ bb_scale <- function(s) {
   if (!isTRUE(all.equal(sort(unique(s$sums)), lo:hi)))
     stop("Scale '", s$version, "_", s$id, "': the attainable sums have gaps; ",
          "the beta-binomial family is not available.")
-  list(unit_per_sum = s$step, offset = as.integer(lo), trials = as.integer(hi - lo))
+  # observed (known) items: their value range is removed from the modelled sum
+  if (length(known)) {
+    lo <- lo - values[["min"]]; hi <- hi - values[["max"]]
+    if (hi <= lo) stop("Scale '", s$version, "_", s$id, "': all items are bridge items; ",
+                       "the scale should be observed directly.")
+  }
+  list(unit_per_sum = s$step, offset = as.integer(round(lo)), trials = as.integer(round(hi - lo)))
+}
+
+#' Bridge items of an outcome that are observed in the reference sample
+#'
+#' Items of the outcome that belong to a bridge predictor used in the model
+#' (excluded predictors, e.g. in the leave-own-domain-out cross-check, do not
+#' count: their items are treated as unobserved).
+#' @noRd
+bb_known_items <- function(s, inst, exclude = NULL) {
+  br <- inst$transfer$bridge
+  used <- br[!map_chr(br, "id") %in% exclude]
+  intersect(s$items, unique(unlist(map(used, "items"))))
+}
+
+#' Value range, bridge pair and unit of the known items (stored with the fit)
+#' @noRd
+known_info <- function(inst, known) {
+  if (!length(known)) return(list(range = c(min = 0, max = 0)))
+  v <- inst$items$values[match(known, inst$items$item)]
+  br <- inst$transfer$bridge
+  pair <- map_chr(known, \(it) br[[which(map_lgl(br, \(b) it %in% b$items))[1]]]$id)
+  list(range = c(min = sum(map_dbl(v, min)), max = sum(map_dbl(v, max))),
+       pair = setNames(pair, known), unit = attr(inst$items, "unit"))
+}
+
+#' Sum of the known bridge items (integer units) per row
+#'
+#' With `info` (projection), a missing known item takes the value of its
+#' bridge predictor, i.e. of the answered item(s) of its bridge pair.
+#' @noRd
+known_sum <- function(d, known, info = NULL) {
+  if (!length(known)) return(rep(0, nrow(d)))
+  cols <- paste0("bi_", known)
+  miss <- setdiff(cols, names(d))
+  if (length(miss)) stop("Bridge item column(s) ", paste(miss, collapse = ", "), " missing; ",
+                         "build the frame with bridge_scores() of normpipe >= 0.2.3.")
+  m <- as.matrix(d[cols])
+  if (!is.null(info) && anyNA(m)) for (j in seq_along(known)) {
+    k <- is.na(m[, j])
+    if (any(k)) m[k, j] <- round(d[[paste0("br_", info$pair[[known[j]]])]][k] / info$unit)
+  }
+  rowSums(m)
 }

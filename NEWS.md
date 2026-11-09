@@ -1,3 +1,26 @@
+# normpipe 0.2.3
+
+* Beta-binomial transfer models no longer model the bridge items an outcome
+  contains. These items are observed in the reference sample, so the sum of
+  the outcome given the bridge is partly known and underdispersed relative to
+  the binomial; the beta-binomial (overdispersion only) then lets the
+  precision parameter drift to infinity, and in the PID-5 production run 21
+  of the 46 fits of such outcomes did not converge (every iteration at the
+  maximum tree depth, R-hat up to infinity). `fit_transfer()` now models the
+  sum of the unobserved items only (`trials` = their range), and
+  `project_outcome()` adds the respondent's observed bridge items back. A
+  missing observed item takes the value of its bridge predictor (the answered
+  item of the pair). Outcomes without bridge items and the
+  leave-own-domain-out fits are unchanged.
+* Beta-binomial fits start all parameters at zero (`init = 0`; from random
+  values a chain could stay on the flat plateau of large phi) and use a
+  proper prior on the coefficients of log(phi), `transfer$prior_b_phi`
+  (default `normal(0, 2.5)`; brms default: flat).
+* `bridge_scores()` also returns the scored single bridge items (`bi_<item>`,
+  integer units).
+* The fit records the observed items (`fit$normpipe`); cached fits of 0.2.2
+  keep their meaning (full sum) when projected.
+
 # normpipe 0.2.2
 
 ## Beta-binomial transfer models

@@ -100,4 +100,29 @@ test_that("the beta-binomial summed-score representation follows the scale", {
   inst$transfer$family <- "beta_binomial"; inst$transfer$phi <- "br_mean"
   sp <- transfer_spec(inst, "full_a")
   expect_equal(sp$prior_b, "normal(0, 1.5)"); expect_equal(sp$phi, "br_mean")
+  expect_equal(sp$prior_b_phi, "normal(0, 2.5)")
+})
+
+test_that("the beta-binomial models only the outcome items not observed in the bridge", {
+  inst <- demo_transfer()
+  s <- get_scale(inst, "full_a")                      # items 1-4, bridge a2 = items 1, 2
+  expect_equal(bb_known_items(s, inst), c(1L, 2L))
+  expect_length(bb_known_items(s, inst, exclude = "a2"), 0)
+  ki <- known_info(inst, c(1L, 2L))
+  expect_equal(ki$range, c(min = 0, max = 12)); expect_equal(unname(ki$pair), c("a2", "a2"))
+  bb <- bb_scale(s, known = c(1L, 2L), values = ki$range)
+  expect_equal(bb$trials, 12L); expect_equal(bb$offset, 0L)
+  expect_error(bb_scale(get_scale(inst, "short_a"), known = c(1L, 2L), values = ki$range),
+               "all items are bridge items")
+  # bridge_scores() carries the single bridge items; a missing one is imputed
+  # from its bridge pair in the projection
+  set.seed(3)
+  it <- as.data.frame(matrix(sample(1:7, 40, TRUE), 5, 8, dimnames = list(NULL, paste0("it", 1:8))))
+  it$it1[2] <- NA
+  bs <- bridge_scores(it, inst)
+  expect_true(all(c("bi_1", "bi_2", "bi_5", "bi_6") %in% names(bs)))
+  expect_true(is.na(known_sum(bs, c(1L, 2L))[2]))
+  imp <- known_sum(bs, c(1L, 2L), info = ki)
+  expect_equal(imp[2], 2 * bs$bi_2[2])
+  expect_equal(imp[-2], (bs$bi_1 + bs$bi_2)[-2])
 })

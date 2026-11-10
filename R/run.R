@@ -188,11 +188,21 @@ stage_p0 <- function(ctx) {
   if (!is.null(ctx$outcomes)) reg <- reg[reg$outcome %in% ctx$outcomes, ]
   observed_items <- integer(0)
   ctx$ref_scores <- NULL; ctx$ref_imp <- NULL; ctx$scores_imp <- NULL
-  if (!inst$missing$reference %in% c("prorate", "impute"))
-    stop("missing$reference must be 'prorate' or 'impute'.")
+  mc <- missing_cfg(inst)
   if (!is.null(ref)) {
+    if (mc$method == "impute") {
+      # unit non-response: too few of the presented items answered
+      share <- answered_share(ref$items, inst)
+      out <- is.na(share) | share < mc$min_answered
+      if (any(out)) {
+        say("P0: ", sum(out), " respondent(s) answered less than ", round(100 * mc$min_answered),
+            " % of the items and are not in the sample")
+        ref <- list(meta = ref$meta[!out, , drop = FALSE], items = ref$items[!out, , drop = FALSE])
+        ctx$ref <- ref
+      }
+    }
     ctx$key_p0 <- cache_key(CACHE_SCHEMA[["p0"]], ref$meta, ref$items, ctx$margins, inst$weighting,
-                            inst$missing, inst$cells, inst$versions, as.data.frame(inst$items))
+                            mc, inst$cells, inst$versions, as.data.frame(inst$items))
     p0 <- get_cached(ctx, "p0_reference", ctx$key_p0, function() {
       meta <- as_tibble(ref$meta)
       if (!"weight" %in% names(meta)) meta$weight <- 1
@@ -213,14 +223,18 @@ stage_p0 <- function(ctx) {
       rows <- match(meta$id, ref$meta$id)
       scores <- bind_cols(meta, score_scales(ref$items, inst, partial = TRUE)[rows, ])
       imp <- NULL; scores_imp <- NULL
-      if (identical(inst$missing$reference, "impute")) {
-        imp <- impute_items(ref$items, inst, M = inst$missing$n_imputations,
-                            seed = sum(utf8ToInt(inst$id)))
+      if (mc$method == "impute") {
+        cv <- intersect(mc$covariates, names(ref$meta))
+        imp <- impute_items(ref$items, inst, M = mc$n_imputations, seed = sum(utf8ToInt(inst$id)),
+                            covariates = if (length(cv)) as.data.frame(ref$meta)[cv], k = mc$neighbours)
         n_imp <- attr(imp, "n_imputed")
         if (sum(n_imp) == 0) imp <- NULL else {
           say("P0: ", sum(n_imp), " skipped item response(s) imputed in ", length(imp),
               " completed data sets")
           scores_imp <- map(imp, \(d) score_scales(d, inst, partial = TRUE)[rows, ])
+          # everyone in the sample has a score on every presented scale; the
+          # plain score table shows the first completed data set
+          scores <- bind_cols(meta, scores_imp[[1]])
         }
       }
       list(scores = scores, imputed = imp, scores_imp = scores_imp, rake_diagnostics = dg)
@@ -259,8 +273,10 @@ stage_m1 <- function(ctx) {
     ctx$fitted[[o]] <- get_cached(ctx, paste0("m1_model_", o), key, function() {
       if (is.null(idx_all)) idx_all <<- item_indices(calib$items, inst, items = inst$items$item[inst$items$col %in% names(calib$items)])
       idx <- idx_all[cols]
-      idx <- idx[stats::complete.cases(idx), , drop = FALSE]
-      ctx$say("M1 ", o, ": fitting ", s$model, " on ", nrow(idx), " complete cases")
+      # full-information likelihood: skipped items are missing, not excluded
+      idx <- idx[rowSums(!is.na(idx)) > 0, , drop = FALSE]
+      ctx$say("M1 ", o, ": fitting ", s$model, " on ", nrow(idx), " respondents (",
+              sum(!stats::complete.cases(idx)), " with skipped items)")
       fit_scale_model(idx, s, inst)
     })
   }

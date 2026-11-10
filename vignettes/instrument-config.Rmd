@@ -161,26 +161,32 @@ gender from `make_margins()` plus a separate education margin
 
 ## `missing`
 
-How single items that a respondent of the reference sample skipped are
-handled. Who is in the sample of a scale is decided beforehand and
-independently by `min_answered` of the scale.
+One handling of skipped items for the whole pipeline.
 
 | Key | Meaning |
 |---|---|
-| `reference` | `prorate`: scores are computed from the answered items. `impute`: every skipped item is drawn from its distribution in the reference sample given the answered items of its block, in `n_imputations` completed data sets (`impute_items()`) [`prorate`] |
+| `method` | `prorate`: scores are means of the answered items, subject to `min_answered` of each scale. `impute`: skipped items are imputed in completed data sets (`impute_items()`) [`prorate`] |
 | `n_imputations` | number of completed data sets [20] |
+| `min_answered` | with `impute`: share of the presented items a respondent must have answered to be in the sample [0.5] |
+| `covariates` | columns of `meta` that enter the matching, e.g. `[age, gender]` [none] |
+| `neighbours` | number of nearest respondents to draw from [10] |
 
-With `impute`, all scores of the reference sample come from the completed
-items: the directly normed scales, the bridge predictors of the transfer
-models and the observed part of the transfer outcomes. Draw `r` of a draw
-frame uses completed data set `((r - 1) mod M) + 1`, so the spread between
-the imputations enters the norm bands. The block of an item is the bridge
-predictor that contains it, otherwise the shortest scale that contains it;
-the conditioning value is the rounded mean of the answered other items of the
-block. Transfer fits are not affected (they use the donor samples), so a
-change of this setting only requires the frames and norm tables to be
-recomputed. The calibration of the measurement models uses the items as
-answered.
+With `impute`, a respondent who answered less than `min_answered` of the
+items presented to the sample is a unit non-respondent: they are removed
+before raking, so the weights account for them. For everyone else each
+skipped item is filled in by a nearest-neighbour hot deck: among the
+respondents who answered the whole block (the largest scale below the total
+that contains the item, typically the domain), one of the `neighbours`
+nearest on the answered items of the block (and the covariates) is drawn per
+completed data set, and the skipped items of the block are copied from them.
+
+All scores then come from the completed items: the directly normed scales,
+the bridge predictors of the transfer models and the observed part of the
+transfer outcomes. Draw `r` of a draw frame uses completed data set
+`((r - 1) mod M) + 1`, so the spread between the imputations enters the norm
+bands. The donor samples of the transfer models are completed in the same
+way. Item models are not fitted to imputed data: they use the responses as
+given, with skipped items missing in the likelihood.
 
 ## `transfer`
 
@@ -215,7 +221,7 @@ The donor samples are attached to the instrument object before calling
 `run_norming()`:
 
 ```r
-inst$donors_data <- list(meta = donor_meta, items = donor_items)
+run_norming(inst, ref = ref, donors = list(meta = donor_meta, items = donor_items), out_dir = "out")
 ```
 
 `donor_meta` needs `id`, `age`, `gender` and `sample`. For every scale that

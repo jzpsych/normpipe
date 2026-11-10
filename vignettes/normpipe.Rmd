@@ -144,8 +144,17 @@ head(long[long$scale == "b" & long$cell == "overall",
 score-conditional interval and `T_int_lo`/`T_int_hi` the integrated interval
 of a person with that raw score.
 
-Stages are cached per scale: rerunning `run_norming()` with the same
-`out_dir` skips everything that already exists.
+Results are cached per scale with a dependency key: rerunning
+`run_norming()` with the same `out_dir` skips every result whose
+configuration, data and upstream results are unchanged and recomputes the
+rest (outdated files are moved to `superseded/`; `cache_status()` lists the
+cache). Stages can also be run one at a time:
+
+```{r, eval = FALSE}
+ctx <- norming_context(inst, ref = sim, out_dir = "demo-out")
+run_stage(ctx, "M1")
+run_stage(ctx, "M3a")
+```
 
 ## 6. Scales the reference sample did not answer
 
@@ -157,8 +166,8 @@ needs donor samples that answered the full instrument:
 ```{r, eval = FALSE}
 inst <- read_instrument(system.file("instruments/demo7/demo7_transfer.yml",
                                     package = "normpipe"))
-inst$donors_data <- list(meta = donor_meta, items = donor_items)  # meta$sample
 run_norming(inst, ref = list(meta = ref_meta, items = ref_bridge_items),
+            donors = list(meta = donor_meta, items = donor_items),  # meta$sample
             out_dir = "transfer-out", stages = c("P0", "M2", "M3a", "X1"))
 ```
 

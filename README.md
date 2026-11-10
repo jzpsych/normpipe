@@ -44,8 +44,10 @@ res <- run_norming(inst, ref = list(meta = sim$meta, items = sim$items),
 
 `ref$meta` needs `id`, `age`, `gender` and optionally `weight`; `ref$items`
 holds the item columns named `<prefix><item>`. Results and per-scale caches
-are written to `out_dir`; a stage is skipped for a scale when its cache file
-exists.
+are written to `out_dir`. Every cached result knows what it was computed
+from: a rerun skips what is unchanged and recomputes what depends on a
+changed setting or data set (`cache_status()`). Single stages can be run
+with `norming_context()` and `run_stage()`.
 
 Norms from frequency tables instead of raw data:
 

@@ -557,14 +557,17 @@ cells:
   age_breaks: [18, 35, 50, 65, Inf]
   ages: [18, 85]
   kernel: {half_width0: 4, min_neff: 150, max_half_width: 12}
-# Skipped items of the reference sample: who is in the sample is decided by
-# min_answered of each scale (and by the inclusion rule of the study); every
-# item a respondent skipped is then imputed in 20 completed data sets, which
-# feed the direct scales, the bridge predictors and the observed part of the
-# transfer outcomes alike (one handling for all 75 scales).
+# Skipped items: a respondent who answered at least half of the presented
+# items is in the sample; every skipped item is then imputed in 20 completed
+# data sets (nearest-neighbour hot deck within the domain, with age and
+# gender), which feed the direct scales, the bridge predictors and the
+# observed part of the transfer outcomes alike. The donor samples of the
+# transfer models are completed in the same way.
 missing:
-  reference: impute
+  method: impute
   n_imputations: 20
+  min_answered: 0.5
+  covariates: [age, gender]
 uncertainty:
   prior_mass: 1
   n_boot: 1000

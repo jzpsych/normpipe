@@ -325,8 +325,8 @@ blocks_for <- function(ctx, o, mods) {
 stage_m2 <- function(ctx) {
   inst <- ctx$inst
   if (!isTRUE(inst$transfer$enabled)) return(invisible(ctx))
-  inst$donors_data <- ctx$donors
-  run_transfer_stage(inst, ctx$reg, ctx$ref, ctx$ref_scores, ctx$out_dir, ctx$say, ref_imp = ctx$ref_imp)
+  run_transfer_stage(inst, ctx$reg, ctx$ref, ctx$ref_scores, donors = ctx$donors,
+                     out_dir = ctx$out_dir, say = ctx$say, ref_imp = ctx$ref_imp)
   invisible(ctx)
 }
 

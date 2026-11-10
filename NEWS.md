@@ -30,6 +30,33 @@ what they depend on, and a driver whose stages can be run one at a time.
   cases.
 * R CMD check runs on pull requests (GitHub Actions).
 
+## Transfer module
+
+* `R/transfer.R` is split by task: `transfer-spec.R` (configuration),
+  `transfer-data.R` (donor and prediction frames, `transfer_data()`),
+  `transfer-observed.R` (observed bridge items, beta-binomial count
+  structure), `transfer-fit.R` (`transfer_model()`, `fit_transfer()`,
+  `select_transfer_family()`), `transfer-project.R` (projection,
+  cross-check) and `transfer-stage.R` (stage M2).
+* New `transfer_data()`: builds one transfer model (response, censoring or
+  trials, formula, brms family, priors, initial values) without Stan, so it
+  can be inspected and tested. `transfer_model()` fits it; `fit_transfer()`
+  does both as before. New `transfer_donor_frame()`.
+* `transfer_spec()`: `family` is always the vector of candidate families
+  (one or more); the family-dependent default of `prior_b` is resolved per
+  fit (`prior_b` stays `NULL` unless configured). A key under
+  `transfer$outcomes` replaces the global key as a whole (also lists such as
+  `family` or `priors`), and unknown keys are an error.
+* Bridge blocks may have any number of items; a block whose items are all
+  missing gives `NA`, and block ids must be unique.
+* `sample` and `gender` terms are dropped from the formulas when the donor
+  data have a single level (one donor sample, single-gender data); the
+  projection then ignores `projection_level`.
+* Stage M2 takes the donor samples as an argument
+  (`run_transfer_stage(..., donors)`) and caches every fit, candidate and
+  family choice through a cache function with a fingerprint of the model
+  (formula, priors, data, sampler settings, backend).
+
 # normpipe 0.2.6
 
 * One handling of skipped items in the reference sample. New instrument block

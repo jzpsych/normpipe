@@ -122,3 +122,12 @@ test_that("numeric respondent ids work with the Dirichlet prior", {
   expect_type(fr$id, "character")
   expect_true(all(c("1", "100") %in% fr$id))
 })
+
+test_that("unknown configuration keys are reported", {
+  cfg <- yaml::yaml.load_file(system.file("instruments/demo7/demo7.yml", package = "normpipe"))
+  expect_silent(read_instrument(cfg))
+  cfg$uncertainty$n_bot <- 10
+  expect_warning(read_instrument(cfg), "n_bot")
+  cfg$uncertainty$n_bot <- NULL; cfg$misssing <- list(method = "impute")
+  expect_warning(read_instrument(cfg), "misssing")
+})

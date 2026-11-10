@@ -52,6 +52,14 @@
 read_instrument <- function(path) {
   cfg <- if (is.character(path)) yaml::yaml.load(paste(readLines(path, encoding = "UTF-8", warn = FALSE), collapse = "\n")) else path
   stopifnot(!is.null(cfg$id), !is.null(cfg$items), !is.null(cfg$versions))
+  check_keys(cfg, c("id", "name", "report_step", "items", "versions", "cells", "reference",
+                    "donors", "measurement", "transfer", "weighting", "missing", "uncertainty"),
+             "the instrument")
+  check_keys(cfg$missing, c("method", "reference", "n_imputations", "min_answered", "covariates",
+                            "neighbours"), "`missing`")
+  check_keys(cfg$weighting, c("trim_quantile", "rerake", "incomplete"), "`weighting`")
+  check_keys(cfg$uncertainty, c("prior_mass", "n_boot", "n_param_draws", "n_draws", "pctl_clamp",
+                                "probs", "pctl_convention"), "`uncertainty`")
   items <- build_item_table(cfg$items)
   cells <- build_cells(cfg$cells)
   versions <- build_versions(cfg$versions, items, cfg$report_step %||% 0.01)
@@ -74,6 +82,17 @@ read_instrument <- function(path) {
       cfg$uncertainty %||% list()),
     source = if (is.character(path)) normalizePath(path) else NA_character_
   ), class = "normpipe_instrument")
+}
+
+#' Warn about configuration keys the package does not know (typos would
+#' otherwise be ignored silently)
+#' @noRd
+check_keys <- function(block, known, where) {
+  bad <- setdiff(names(block), known)
+  if (length(bad))
+    warning("Unknown key(s) in ", where, ": ", paste(bad, collapse = ", "),
+            ". Known keys: ", paste(known, collapse = ", "), ".", call. = FALSE)
+  invisible(NULL)
 }
 
 #' @rdname read_instrument

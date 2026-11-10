@@ -150,3 +150,33 @@ test_that("extra priors replace defaults of the same class and dpar; init is che
   inst$transfer$init <- 0
   expect_equal(transfer_spec(inst, "full_a")$init, 0)
 })
+
+test_that("full_init gives every parameter of a censored model a value", {
+  skip_if_not_installed("brms")
+  set.seed(1)
+  d <- data.frame(x = rnorm(50), age = runif(50, 20, 80))
+  d$y <- round(pmin(pmax(1 + 0.5 * d$x + rnorm(50, 0, 0.5), 0), 3), 1)
+  d$lo <- d$y - 0.05; d$hi <- d$y + 0.05; d$ci <- "interval"
+  f <- brms::bf(lo | cens(ci, hi) ~ x + s(age), sigma ~ x)
+  ini <- full_init(f, d, stats::gaussian(), list(Intercept = 1, Intercept_sigma = log(0.5)))()
+  expect_setequal(names(ini), c("b", "Intercept", "bs", "zs_1_1", "sds_1", "b_sigma", "Intercept_sigma"))
+  expect_equal(ini$Intercept, 1, tolerance = 0.3)
+  expect_equal(ini$Intercept_sigma, log(0.5), tolerance = 0.3)
+  expect_length(ini$b, 1)
+  expect_true(all(ini$sds_1 > 0))
+})
+
+test_that("several candidate families are accepted; priors follow the family of each fit", {
+  inst <- demo_transfer()
+  inst$transfer$family <- list("beta_binomial", "gaussian")
+  sp <- transfer_spec(inst, "full_a")
+  expect_equal(sp$families, c("beta_binomial", "gaussian")); expect_equal(sp$family, "beta_binomial")
+  expect_equal(sp$select_rhat, 1.01)
+  skip_if_not_installed("brms")
+  pb <- function(fam) { p <- transfer_priors(sp, fam); p$prior[p$class == "b" & p$dpar == ""] }
+  expect_equal(pb("beta_binomial"), "normal(0, 1.5)"); expect_equal(pb("gaussian"), "normal(0, 1)")
+  sp$prior_b_user <- "normal(0, 2)"
+  expect_equal(pb("gaussian"), "normal(0, 2)")
+  inst$transfer$family <- list("beta_binomial", "poisson")
+  expect_error(transfer_spec(inst, "full_a"), "poisson")
+})

@@ -123,15 +123,16 @@ run_transfer_stage <- function(inst, reg, ref, ref_scores, donors = inst$donors_
     }
     fits <- set_names(map(fams, \(fam) fit_one(fam, paste0("transfer_", k, "__", fam))), fams)
     keys <- map_chr(fams, key_of)
-    sel <- cache(paste0("transfer_", k, "_selection"), rlang::hash(list(keys, sp$select_rhat)), function() {
-      x <- select_transfer_family(fits, rhat_max = sp$select_rhat)
+    sel <- cache(paste0("transfer_", k, "_selection"), rlang::hash(list(keys, sp$select_rhat, sp$select_rhat_chain)), function() {
+      x <- select_transfer_family(fits, rhat_max = sp$select_rhat, rhat_chain = sp$select_rhat_chain %||% 1.05)
       x$outcome <- k
       x
     })
     best <- sel$family[sel$chosen]
     cache(paste0("transfer_", k), rlang::hash(list(keys, sp$select_rhat, best)), function() {
       why <- ifelse(sel$eligible, "", sprintf(", not converged: R-hat %.3f, %d at max. tree depth",
-                                               sel$rhat_max, sel$treedepth_hits))
+                                               ifelse(is.na(sel$rhat_within), sel$rhat_max, sel$rhat_within),
+                                               sel$treedepth_hits))
       say("M2 ", k, ": ", best, " chosen by LOO (",
           paste(sprintf("%s %.1f%s", sel$family, sel$elpd_loo, why), collapse = "; "), ")",
           if (!any(sel$eligible)) " -- no candidate converged, chosen among all; check the fits" else "")

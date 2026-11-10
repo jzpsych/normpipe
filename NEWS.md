@@ -35,7 +35,9 @@ what they depend on, and a driver whose stages can be run one at a time.
   fitted in parallel after one compilation), so the posterior carries the
   imputation uncertainty at the cost of one fit and no donor is lost
   scale by scale. PSIS-LOO for the family selection uses the log-likelihood
-  of each chain on its own data set.
+  of each chain on its own data set. Convergence of such fits is judged within
+  the single chains (`select_rhat_chain`, default 1.05), because the R-hat
+  over the pooled chains also counts the differences between the data sets.
 * The projection builds the prediction frames of the reference sample from
   the run itself; `m2_prediction_frame*.rds` are no longer written, and the
   norm stages no longer depend on a rerun of stage `M2`.

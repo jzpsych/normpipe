@@ -23,9 +23,10 @@ When skipped items of the donor samples were imputed
 set with one chain each and the chains are pooled, so the posterior carries
 the imputation uncertainty at the cost of a single fit. R-hat over the
 pooled chains also counts differences between the completed data sets, so
-the split R-hat within each chain is kept as well
-(`fit$normpipe_rhat_within`) and the smaller of the two is used to judge
-convergence. The
+convergence of such a fit is judged by the largest split R-hat within a
+single chain (`fit$normpipe_rhat_within`). A single chain gives a noisier
+R-hat than four (healthy fits reach about 1.01 to 1.04, a stuck chain 1.5
+and more), hence its own threshold in [select_transfer_family()]. The
 pointwise log-likelihood of each chain is evaluated on its own data set;
 the resulting PSIS-LOO object is stored in `fit$normpipe_loo` and used by
 [select_transfer_family()].

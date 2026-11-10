@@ -58,9 +58,10 @@ transfer_model <- function(td, backend = "rstan", file = NULL, ...) {
 #' set with one chain each and the chains are pooled, so the posterior carries
 #' the imputation uncertainty at the cost of a single fit. R-hat over the
 #' pooled chains also counts differences between the completed data sets, so
-#' the split R-hat within each chain is kept as well
-#' (`fit$normpipe_rhat_within`) and the smaller of the two is used to judge
-#' convergence. The
+#' convergence of such a fit is judged by the largest split R-hat within a
+#' single chain (`fit$normpipe_rhat_within`). A single chain gives a noisier
+#' R-hat than four (healthy fits reach about 1.01 to 1.04, a stuck chain 1.5
+#' and more), hence its own threshold in [select_transfer_family()]. The
 #' pointwise log-likelihood of each chain is evaluated on its own data set;
 #' the resulting PSIS-LOO object is stored in `fit$normpipe_loo` and used by
 #' [select_transfer_family()].
@@ -148,14 +149,10 @@ fit_transfer <- function(outcome, dat, s, inst, exclude = NULL,
 #' Convergence summary of a brms fit
 #' @noRd
 fit_convergence <- function(fit) {
-  rh_pooled <- suppressWarnings(max(brms::rhat(fit), na.rm = TRUE))
-  # fits on several completed donor data sets: the pooled R-hat also counts
-  # differences between the data sets, the split R-hat within single chains
-  # is noisier; the fit counts as converged when either is small
-  rh <- min(rh_pooled, fit$normpipe_rhat_within %||% Inf)
+  rh <- suppressWarnings(max(brms::rhat(fit), na.rm = TRUE))
   np <- brms::nuts_params(fit)
   mtd <- tryCatch(fit$fit@stan_args[[1]]$control$max_treedepth, error = function(e) NULL) %||% 10
-  list(rhat_max = rh, rhat_pooled = rh_pooled,
+  list(rhat_max = rh, rhat_within = fit$normpipe_rhat_within %||% NA_real_,
        divergent = sum(np$Value[np$Parameter == "divergent__"]),
        treedepth_hits = sum(np$Value[np$Parameter == "treedepth__"] >= mtd))
 }
@@ -171,11 +168,16 @@ fit_convergence <- function(fit) {
 #'
 #' @param fits Named list of brms fits (names: families).
 #' @param rhat_max Largest R-hat of an eligible fit.
+#' @param rhat_chain Largest within-chain split R-hat of an eligible fit that
+#'   was pooled over completed donor data sets ([transfer_model_multiple()]);
+#'   for such fits `rhat_max` is reported but not used, because it also counts
+#'   the differences between the data sets.
 #' @return Tibble with `family`, `elpd_loo`, `se_elpd_loo`, `rhat_max`,
+#'   `rhat_within` (`NA` for an ordinary fit),
 #'   `divergent`, `treedepth_hits`, `pareto_k_bad` (observations with
 #'   k > 0.7), `eligible`, `chosen`, `elpd_diff` and `se_diff` (to the chosen).
 #' @export
-select_transfer_family <- function(fits, rhat_max = 1.01) {
+select_transfer_family <- function(fits, rhat_max = 1.01, rhat_chain = 1.05) {
   if (!requireNamespace("brms", quietly = TRUE)) stop("brms is not installed.")
   rows <- lapply(names(fits), function(fam) {
     fit <- fits[[fam]]
@@ -183,12 +185,15 @@ select_transfer_family <- function(fits, rhat_max = 1.01) {
     lo <- fit$normpipe_loo %||% suppressWarnings(brms::loo(fit))
     list(row = tibble(family = fam, elpd_loo = lo$estimates["elpd_loo", 1],
                       se_elpd_loo = lo$estimates["elpd_loo", 2], rhat_max = cv$rhat_max,
+                      rhat_within = cv$rhat_within,
                       divergent = cv$divergent, treedepth_hits = cv$treedepth_hits,
                       pareto_k_bad = sum(lo$diagnostics$pareto_k > 0.7)),
          pw = lo$pointwise[, "elpd_loo"])
   })
   tab <- bind_rows(lapply(rows, `[[`, "row"))
-  tab$eligible <- tab$rhat_max <= rhat_max & tab$treedepth_hits == 0
+  # fits pooled over completed donor data sets: R-hat within the chains
+  tab$eligible <- ifelse(is.na(tab$rhat_within), tab$rhat_max <= rhat_max, tab$rhat_within <= rhat_chain) &
+    tab$treedepth_hits == 0
   pool <- if (any(tab$eligible)) which(tab$eligible) else seq_len(nrow(tab))
   best <- pool[which.max(tab$elpd_loo[pool])]
   tab$chosen <- seq_len(nrow(tab)) == best

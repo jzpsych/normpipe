@@ -51,6 +51,77 @@ transfer_model <- function(td, backend = "rstan", file = NULL, ...) {
   fit
 }
 
+#' Transfer model on several completed donor data sets
+#'
+#' When skipped items of the donor samples were imputed
+#' (`missing: {method: impute}`), the model is fitted once per completed data
+#' set with one chain each and the chains are pooled, so the posterior carries
+#' the imputation uncertainty at the cost of a single fit. R-hat over the
+#' pooled chains also counts differences between the completed data sets, so
+#' the split R-hat within each chain is kept as well
+#' (`fit$normpipe_rhat_within`) and the smaller of the two is used to judge
+#' convergence. The
+#' pointwise log-likelihood of each chain is evaluated on its own data set;
+#' the resulting PSIS-LOO object is stored in `fit$normpipe_loo` and used by
+#' [select_transfer_family()].
+#'
+#' @param tds List of [transfer_data()] outputs, one per completed data set,
+#'   for the same outcome and family.
+#' @param backend Stan backend.
+#' @param ... Further arguments passed to [brms::brm_multiple()].
+#' @return A `brmsfit` with pooled chains.
+#' @export
+transfer_model_multiple <- function(tds, backend = "rstan", ...) {
+  if (!requireNamespace("brms", quietly = TRUE)) stop("brms is not installed.")
+  stopifnot(length(tds) >= 1, all(map_lgl(tds, inherits, "normpipe_transfer_data")))
+  if (length(tds) == 1) return(transfer_model(tds[[1]], backend = backend, ...))
+  td <- tds[[1]]; sp <- td$spec
+  # compile once, then one chain per completed data set, in parallel
+  args0 <- c(list(formula = td$formula, data = td$data, family = td$bfamily, prior = td$prior,
+                  chains = 0, backend = backend), list(...))
+  args0 <- args0[!duplicated(names(args0), fromLast = TRUE)]
+  fit0 <- suppressMessages(do.call(brms::brm, args0))
+  datas <- map(tds, "data")
+  # initial values are drawn here, one set per chain (0: brms default "0")
+  init <- if (is.function(td$init)) map(seq_along(tds), \(i) list(td$init())) else
+    if (!is.null(td$init)) rep(list(td$init), length(tds))
+  control <- list(adapt_delta = sp$adapt_delta, max_treedepth = sp$max_treedepth)
+  iter <- list(...)$iter %||% sp$iter
+  seed <- list(...)$seed %||% sample.int(1e6, 1)
+  # self-contained, so that it runs on the workers of a cluster
+  run_one <- function(i, fit0, datas, iter, control, seed, init) {
+    a <- list(fit0, newdata = datas[[i]], chains = 1, cores = 1, iter = iter, control = control,
+              recompile = FALSE, seed = seed + i, refresh = 0)
+    if (!is.null(init)) a$init <- init[[i]]
+    do.call(stats::update, a)
+  }
+  environment(run_one) <- globalenv()
+  workers <- min(length(tds), getOption("mc.cores", 4L))
+  fits <- NULL
+  if (workers > 1) fits <- tryCatch({
+    cl <- parallel::makePSOCKcluster(workers)
+    on.exit(parallel::stopCluster(cl), add = TRUE)
+    parallel::clusterCall(cl, function() { requireNamespace("brms"); NULL })
+    parallel::parLapply(cl, seq_along(tds), run_one, fit0 = fit0, datas = datas, iter = iter,
+                        control = control, seed = seed, init = init)
+  }, error = function(e) { message("transfer_model_multiple: parallel fits failed (", conditionMessage(e),
+                                   "), fitting one after the other"); NULL })
+  if (is.null(fits)) fits <- map(seq_along(tds), run_one, fit0 = fit0, datas = datas, iter = iter,
+                                 control = control, seed = seed, init = init)
+  ll <- do.call(rbind, map(fits, brms::log_lik))
+  chain <- rep(seq_along(fits), times = map_int(fits, brms::ndraws))
+  loo <- suppressWarnings(loo::loo(ll, r_eff = loo::relative_eff(exp(ll), chain_id = chain)))
+  # convergence within each chain (split R-hat): pooled R-hat would also
+  # count the differences between the completed data sets
+  rhat_within <- max(map_dbl(fits, \(f) suppressWarnings(max(brms::rhat(f), na.rm = TRUE))))
+  fit <- brms::combine_models(mlist = fits, check_data = FALSE)
+  fit$normpipe_rhat_within <- rhat_within
+  fit$normpipe <- td$info
+  fit$normpipe_loo <- loo
+  fit$normpipe_n_data <- length(tds)
+  fit
+}
+
 #' @rdname transfer_model
 #' @param outcome Outcome name (`<version>_<scale>`), a column of `dat`.
 #' @param dat Donor frame ([transfer_donor_frame()]).
@@ -77,10 +148,14 @@ fit_transfer <- function(outcome, dat, s, inst, exclude = NULL,
 #' Convergence summary of a brms fit
 #' @noRd
 fit_convergence <- function(fit) {
-  rh <- suppressWarnings(max(brms::rhat(fit), na.rm = TRUE))
+  rh_pooled <- suppressWarnings(max(brms::rhat(fit), na.rm = TRUE))
+  # fits on several completed donor data sets: the pooled R-hat also counts
+  # differences between the data sets, the split R-hat within single chains
+  # is noisier; the fit counts as converged when either is small
+  rh <- min(rh_pooled, fit$normpipe_rhat_within %||% Inf)
   np <- brms::nuts_params(fit)
   mtd <- tryCatch(fit$fit@stan_args[[1]]$control$max_treedepth, error = function(e) NULL) %||% 10
-  list(rhat_max = rh,
+  list(rhat_max = rh, rhat_pooled = rh_pooled,
        divergent = sum(np$Value[np$Parameter == "divergent__"]),
        treedepth_hits = sum(np$Value[np$Parameter == "treedepth__"] >= mtd))
 }
@@ -105,7 +180,7 @@ select_transfer_family <- function(fits, rhat_max = 1.01) {
   rows <- lapply(names(fits), function(fam) {
     fit <- fits[[fam]]
     cv <- fit_convergence(fit)
-    lo <- suppressWarnings(brms::loo(fit))
+    lo <- fit$normpipe_loo %||% suppressWarnings(brms::loo(fit))
     list(row = tibble(family = fam, elpd_loo = lo$estimates["elpd_loo", 1],
                       se_elpd_loo = lo$estimates["elpd_loo", 2], rhat_max = cv$rhat_max,
                       divergent = cv$divergent, treedepth_hits = cv$treedepth_hits,

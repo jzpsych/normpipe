@@ -147,22 +147,6 @@ prediction_frames <- function(ref_scores, ref_ids, items_list, fit, inst) {
   })
 }
 
-#' Draw frame of a transfer outcome from the cached fit (used by run_norming)
-#' @noRd
-project_frame <- function(o, s, inst, out_dir, suffix = "") {
-  fit <- readRDS(file.path(out_dir, paste0("transfer_", o, suffix, ".rds")))
-  f_imp <- file.path(out_dir, "m2_prediction_frames_imputed.rds")
-  pred <- if (file.exists(f_imp)) readRDS(f_imp) else
-    list(readRDS(file.path(out_dir, "m2_prediction_frame.rds")))
-  ok <- !is.na(pred[[1]]$age) & !is.na(pred[[1]]$gender)
-  pred <- map(pred, \(p) p[ok, ])
-  if (length(pred) == 1) pred <- pred[[1]]
-  set.seed(sum(utf8ToInt(o)))
-  project_outcome(fit, pred, s, n_draws = inst$transfer$n_draws %||% 500,
-                  level = inst$transfer$projection_level %||% NULL,
-                  bootstrap_weights = inst$transfer$bootstrap_weights %||% TRUE)
-}
-
 #' Leave-own-domain-out cross-check of a directly observed scale
 #'
 #' Compares the norms of a directly observed scale with the norms obtained

@@ -185,7 +185,9 @@ the bridge predictors of the transfer models and the observed part of the
 transfer outcomes. Draw `r` of a draw frame uses completed data set
 `((r - 1) mod M) + 1`, so the spread between the imputations enters the norm
 bands. The donor samples of the transfer models are completed in the same
-way. Item models are not fitted to imputed data: they use the responses as
+way (same inclusion rule, same hot deck); each chain of a transfer model is
+then fitted to one of the completed donor data sets and the chains are
+pooled. Item models are not fitted to imputed data: they use the responses as
 given, with skipped items missing in the likelihood.
 
 ## `transfer`

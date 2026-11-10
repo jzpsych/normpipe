@@ -187,7 +187,7 @@ test_that("run_norming() norms a reference sample with skipped items from comple
     inst$versions[[v]]$scales[[k]]$min_answered <- 0.5
   out <- file.path(tempdir(), "np_impute"); unlink(out, recursive = TRUE)
   suppressMessages(run_norming(inst, sim, out, stages = c("P0", "M3a"), verbose = FALSE))
-  expect_true(file.exists(file.path(out, "p0_imputed_items.rds")))
+  expect_false(is.null(readRDS(file.path(out, "p0_reference.rds"))$imputed))
   fr <- frame_long(readRDS(file.path(out, "frame_full_b.rds")))
   expect_false(anyNA(fr$score))
   expect_true(all(fr$score %in% get_scale(inst, "full_b")$grid))

@@ -1,3 +1,24 @@
+# normpipe 0.2.6
+
+* One handling of skipped items in the reference sample. New instrument block
+  `missing: {reference: impute, n_imputations: 20}` (default `prorate`, the
+  behaviour so far): `impute_items()` draws every skipped item from its
+  distribution in the reference sample given the answered items of its block
+  (bridge predictor, otherwise shortest scale) in `n_imputations` completed
+  data sets. `run_norming()` computes the directly normed scales, the bridge
+  predictors and the observed part of the transfer outcomes from these data
+  sets; draw `r` of a draw frame uses data set `((r - 1) mod M) + 1`, so the
+  imputation uncertainty enters the norm bands. Before, directly normed
+  scales were prorated and bridge predictors were means of the answered
+  items, while only the observed items of transfer outcomes were imputed.
+* `direct_frame()` gains `scores_imp`; `project_outcome()` accepts a list of
+  prediction frames (one per completed data set) and spreads the posterior
+  draws over them.
+* The inclusion rule (`min_answered`) is unchanged and is applied to the
+  answered items. Transfer fits are not affected; caches `frame_*`, `m3*` and
+  `m2_prediction_frame` of an earlier run have to be recomputed. The PID-5
+  instrument switches to `impute`.
+
 # normpipe 0.2.5
 
 * `transfer$family` may list several candidates, e.g.

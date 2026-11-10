@@ -159,6 +159,29 @@ gender from `make_margins()` plus a separate education margin
 
 `rerake: false` reproduces the one-shot trimming of normpipe 0.1.0.
 
+## `missing`
+
+How single items that a respondent of the reference sample skipped are
+handled. Who is in the sample of a scale is decided beforehand and
+independently by `min_answered` of the scale.
+
+| Key | Meaning |
+|---|---|
+| `reference` | `prorate`: scores are computed from the answered items. `impute`: every skipped item is drawn from its distribution in the reference sample given the answered items of its block, in `n_imputations` completed data sets (`impute_items()`) [`prorate`] |
+| `n_imputations` | number of completed data sets [20] |
+
+With `impute`, all scores of the reference sample come from the completed
+items: the directly normed scales, the bridge predictors of the transfer
+models and the observed part of the transfer outcomes. Draw `r` of a draw
+frame uses completed data set `((r - 1) mod M) + 1`, so the spread between
+the imputations enters the norm bands. The block of an item is the bridge
+predictor that contains it, otherwise the shortest scale that contains it;
+the conditioning value is the rounded mean of the answered other items of the
+block. Transfer fits are not affected (they use the donor samples), so a
+change of this setting only requires the frames and norm tables to be
+recomputed. The calibration of the measurement models uses the items as
+answered.
+
 ## `transfer`
 
 The transfer module (stage `M2`) is needed only when the reference sample
@@ -210,7 +233,9 @@ respondent's observed part to every posterior predictive draw of the rest.
 The rest carries the parameter and residual uncertainty, the observed part is
 data. An observed item the respondent skipped is drawn anew in every draw from
 its distribution in the donor samples given the answered item of the same
-bridge pair. This rule is fixed; it has no switch.
+bridge pair; with `missing: {reference: impute}` it is taken from the
+completed data sets instead, like every other skipped item. That observed
+items are never predicted is fixed; it has no switch.
 
 The posterior predictive draws for the reference
 sample, evaluated at the projection level of `sample` and combined with

@@ -1,3 +1,35 @@
+# normpipe 0.3.0 (in development)
+
+Consolidation release: one handling of missing responses, caches that know
+what they depend on, and a driver whose stages can be run one at a time.
+
+* **Caches with dependency keys.** Every cached result is recorded in
+  `cache_manifest.csv` with a hash of the configuration, data and upstream
+  results it depends on (`cache_key()`, `cache_get()`, `cache_status()`). A
+  rerun recomputes exactly what a change affects; outdated files are moved
+  to `superseded/`, not deleted. Files cached by earlier versions have no
+  key and are recomputed. Item models are cached per scale
+  (`m1_model_<outcome>.rds` instead of `m1_models.rds`), the reference
+  scores, weights and completed data sets in `p0_reference.rds`.
+* **Stages.** `norming_context()` collects the inputs of a run and
+  `run_stage()` runs one stage; `run_norming()` is a loop over them.
+* **Donor samples are an argument** (`run_norming(donors = )`) instead of
+  `inst$donors_data`, which is still accepted.
+* **Missing responses.** The `missing` block now reads
+  `{method: impute, n_imputations, min_answered, covariates, neighbours}`
+  (`reference:` of 0.2.6 is accepted for `method:`). With `impute`,
+  respondents who answered less than `min_answered` (default one half) of
+  the presented items are unit non-respondents and leave the sample before
+  raking; this replaces inclusion rules in analysis scripts and the
+  per-scale `min_answered`, which applies to `prorate` only. `impute_items()`
+  is now a nearest-neighbour hot deck within the largest scale below the
+  total (typically the domain), optionally with covariates, and copies all
+  skipped items of a block from the same neighbour. `answered_share()` is new.
+* Item models are calibrated on all respondents with at least one response
+  to the scale (skipped items missing in the likelihood) instead of complete
+  cases.
+* R CMD check runs on pull requests (GitHub Actions).
+
 # normpipe 0.2.6
 
 * One handling of skipped items in the reference sample. New instrument block

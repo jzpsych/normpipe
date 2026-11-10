@@ -2,6 +2,8 @@
 % Please edit documentation in R/run.R
 \name{run_norming}
 \alias{run_norming}
+\alias{norming_context}
+\alias{run_stage}
 \title{Run the norming pipeline}
 \usage{
 run_norming(
@@ -12,11 +14,28 @@ run_norming(
   calib = NULL,
   margins = NULL,
   models = NULL,
-  stages = c("P0", "M1", "M2", "M3a", "M3b", "M3c", "M3d", "X1"),
+  donors = NULL,
+  stages = STAGES,
   outcomes = NULL,
   portal_citation = "",
   verbose = TRUE
 )
+
+norming_context(
+  inst,
+  ref = NULL,
+  out_dir,
+  freq = NULL,
+  calib = NULL,
+  margins = NULL,
+  models = NULL,
+  donors = NULL,
+  outcomes = NULL,
+  portal_citation = "",
+  verbose = TRUE
+)
+
+run_stage(ctx, stage)
 }
 \arguments{
 \item{inst}{Instrument ([read_instrument()]).}
@@ -37,11 +56,13 @@ the item columns named `<prefix><item>`, in the same row order as `meta`.}
 frame ([make_margins()]) or a list of margin data frames
 ([rake_to_margins()]). Trimming, re-raking and the handling of
 respondents who cannot be raked follow the `weighting` block of the
-instrument (`trim_quantile` [0.99], `rerake` [true], `incomplete`
-[drop]).}
+instrument.}
 
 \item{models}{Optional named list of pre-fitted item models per outcome
 ([fit_scale_model()]); they take precedence over stage `M1`.}
+
+\item{donors}{Donor samples for the transfer module: `list(meta, items)`
+with a column `meta$sample` naming the sample.}
 
 \item{stages}{Stages to run (see Details).}
 
@@ -50,26 +71,34 @@ instrument (`trim_quantile` [0.99], `rerake` [true], `incomplete`
 \item{portal_citation}{Citation string written into the portal JSON.}
 
 \item{verbose}{Print progress messages.}
+
+\item{ctx}{Context of a run (`norming_context()`).}
+
+\item{stage}{One of the stages (see Details).}
 }
 \value{
-With stage `X1`, the long norm table (invisibly); otherwise
-  `NULL` (invisibly). All results are written to `out_dir`.
+`run_norming()`: with stage `X1`, the long norm table (invisibly);
+  otherwise `NULL` (invisibly). `norming_context()`: an environment of
+  class `normpipe_run`. `run_stage()`: the context (invisibly); for `X1`
+  the long table is in `ctx$long`. All results are written to `out_dir`.
 }
 \description{
-Runs the stages of the pipeline for one instrument and writes every result
-to `out_dir`. Intermediate results are cached per scale as `.rds` files and
-a stage is skipped for a scale when its cache file exists; delete the
-files (or use a new `out_dir`) to recompute.
+`run_norming()` runs the stages of the pipeline for one instrument and
+writes every result to `out_dir`. `norming_context()` only collects the
+inputs of a run; `run_stage()` then runs single stages on it, which is
+convenient for long runs and for inspecting intermediate results.
 }
 \details{
 Stages:
 * `P0`: scoring of the reference sample, optional raking to `margins`,
-  route per scale (direct, frequency or transfer).
+  imputation of skipped items (`missing` block), route per scale (direct,
+  frequency or transfer). `P0` is cheap and is run by every other stage
+  when it has not been run on the context yet.
 * `M1`: calibration of the item models ([fit_scale_model()]) in the
   calibration sample (default: the reference sample).
-* `M2`: transfer models and projection for scales whose items the
-  reference sample did not answer (only with `transfer: enabled: true`;
-  donor samples in `inst$donors_data`, see [fit_transfer()]).
+* `M2`: transfer models for scales whose items the reference sample did
+  not answer (only with `transfer: enabled: true` and `donors`, see
+  [fit_transfer()]).
 * `M3a`: band norms per reporting cell and overall ([norms_all_cells()]).
 * `M3b`: continuous-age kernel norms ([weighted_norms_continuous()]).
 * `M3c`: score-conditional intervals ([conditional_tables()]).
@@ -82,6 +111,14 @@ Stages:
 Scales without an item model (`model: none`, or frequency input without
 `models`) get norms and norm bands but no individual intervals. When
 transfer is disabled, scales that would need it are dropped.
+
+Caching. Intermediate results are stored per scale as `.rds` files with a
+dependency key ([cache_key()]). A stage is skipped for a scale when its
+result exists and neither the configuration it uses, nor the data, nor the
+results it builds on have changed; otherwise the result is recomputed and
+the outdated file is moved to `out_dir/superseded/`. Changing, say, the
+number of bootstrap draws therefore recomputes the frames and norm tables
+but neither the item models nor the transfer fits.
 }
 \examples{
 \dontrun{
@@ -91,5 +128,9 @@ sim <- simulate_reference(inst, N = 1500)
 res <- run_norming(inst, ref = list(meta = sim$meta, items = sim$items),
                    out_dir = "demo-out",
                    stages = c("P0", "M1", "M3a", "M3b", "M3c", "M3d", "X1"))
+# the same, stage by stage
+ctx <- norming_context(inst, ref = sim, out_dir = "demo-out")
+run_stage(ctx, "M3a")
+cache_status("demo-out")
 }
 }

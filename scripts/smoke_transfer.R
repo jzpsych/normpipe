@@ -10,11 +10,10 @@ inst <- read_instrument(system.file("instruments/demo7/demo7_transfer.yml", pack
 conv <- inst$uncertainty$pctl_convention
 don <- simulate_reference(inst, N = 800, seed = 3)
 don$meta$sample <- rep(c("quota", "clinical"), length.out = 800)
-inst$donors_data <- list(meta = don$meta, items = don$items)
 ref <- simulate_reference(inst, N = 1000, seed = 4)
 out <- "demo-transfer-out"
 res <- run_norming(inst, ref = list(meta = ref$meta, items = ref$items[, c("it1", "it2", "it5", "it6")]),
-                   out_dir = out, stages = c("P0", "M2", "M3a", "X1"))
+                   donors = list(meta = don$meta, items = don$items), out_dir = out, stages = c("P0", "M2", "M3a", "X1"))
 sc <- score_scales(ref$items, inst)
 d <- add_age_group(mutate(ref$meta, a = sc$full_a, total = sc$full_total), inst)
 true_pr <- function(x, at) {

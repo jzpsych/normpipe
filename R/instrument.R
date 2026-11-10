@@ -66,6 +66,8 @@ read_instrument <- function(path) {
     transfer = modifyList(list(enabled = FALSE), cfg$transfer %||% list()),
     weighting = modifyList(list(trim_quantile = 0.99, rerake = TRUE, incomplete = "drop"),
                            cfg$weighting %||% list()),
+    missing = modifyList(list(reference = "prorate", n_imputations = 20),
+                         cfg$missing %||% list()),
     uncertainty = modifyList(
       list(prior_mass = 1, n_boot = 200, n_param_draws = 50, n_draws = 500,
            pctl_clamp = 1e-4, probs = c(.025, .975),

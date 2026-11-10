@@ -36,6 +36,14 @@ getting-started guide is `vignette("normpipe", package = "normpipe")`.
 * Driver and test data: [run_norming()], [simulate_reference()]
 }
 
+\seealso{
+Useful links:
+\itemize{
+  \item \url{https://github.com/jzpsych/normpipe}
+  \item Report bugs at \url{https://github.com/jzpsych/normpipe/issues}
+}
+
+}
 \author{
 \strong{Maintainer}: Johannes Zimmermann \email{jz@uni-kassel.de}
 

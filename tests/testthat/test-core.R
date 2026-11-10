@@ -122,3 +122,76 @@ test_that("numeric respondent ids work with the Dirichlet prior", {
   expect_type(fr$id, "character")
   expect_true(all(c("1", "100") %in% fr$id))
 })
+
+test_that("skipped items are imputed within the response categories and reproducibly", {
+  inst <- demo_inst()
+  sim <- simulate_reference(inst, N = 300, seed = 4)
+  expect_identical(impute_items(sim$items, inst, M = 2)[[1]], sim$items)   # complete data unchanged
+  it <- sim$items
+  set.seed(1); holes <- cbind(sample(300, 60), sample(8, 60, TRUE)); it[holes] <- NA
+  it[7, ] <- NA                                                           # nothing answered
+  imp <- impute_items(it, inst, M = 5, seed = 2)
+  expect_length(imp, 5)
+  expect_equal(sum(attr(imp, "n_imputed")), sum(is.na(it)))
+  for (d in imp) {
+    expect_false(anyNA(d))
+    expect_true(all(as.matrix(d) %in% 1:7))
+    expect_identical(d[!is.na(it)], it[!is.na(it)])                       # answered items stay
+  }
+  expect_identical(impute_items(it, inst, M = 5, seed = 2), imp)
+  expect_false(identical(imp[[1]], imp[[2]]))
+  # the draw follows the answered items of the block (here item 2)
+  it2 <- sim$items; hi <- rowMeans(it2[, 2:4]) >= 5.5; lo <- rowMeans(it2[, 2:4]) <= 2.5
+  it2$it1[which(hi)[1:5]] <- NA; it2$it1[which(lo)[1:5]] <- NA
+  d <- do.call(cbind, lapply(impute_items(it2, inst, M = 40), \(x) x$it1))
+  expect_gt(mean(d[which(hi)[1:5], ]), mean(d[which(lo)[1:5], ]) + 1)
+  # the bridge pair is the block when the instrument has bridge predictors
+  tr <- read_instrument(system.file("instruments/demo7/demo7_transfer.yml", package = "normpipe"))
+  expect_equal(imputation_blocks(tr, 1:8)[["1"]], c(1L, 2L))
+  expect_equal(imputation_blocks(inst, 1:8)[["1"]], 1:2)       # shortest scale: short_a
+  expect_equal(imputation_blocks(inst, 1:8)[["3"]], 1:4)
+  expect_equal(imputation_blocks(tr, c(1, 2, 5, 6))[["5"]], c(5L, 6L))
+})
+
+test_that("direct frames take the scores of the completed data sets draw by draw", {
+  inst <- demo_inst(); inst$versions$full$scales$b$min_answered <- 0.5
+  s <- get_scale(inst, "full_b")
+  sim <- simulate_reference(inst, N = 120, seed = 5)
+  it <- sim$items; it$it5[1:10] <- NA
+  sc <- score_scales(it, inst)
+  imp <- impute_items(it, inst, M = 3)
+  si <- sapply(imp, \(d) score_scales(d, inst)$full_b)
+  ref <- dplyr::mutate(sim$meta, score = sc$full_b)
+  ref$score[11] <- NA                                    # excluded respondent stays out
+  f0 <- direct_frame(ref, s, inst, n_boot = 7)
+  f1 <- direct_frame(ref, s, inst, n_boot = 7, scores_imp = si)
+  expect_equal(f1$weight, f0$weight); expect_equal(f1$id, f0$id)
+  id <- as.character(sim$meta$id)
+  expect_false(id[11] %in% f1$id)
+  for (r in 1:7) {
+    x <- f1[f1$.draw == r, ]
+    expect_equal(x$score[match(id[-11], x$id)], si[-11, (r - 1) %% 3 + 1])
+  }
+  complete <- f1$id %in% id[12:120]
+  expect_equal(f1$score[complete], f0$score[complete])
+  expect_equal(f1$score[!f1$id %in% id], f0$score[!f0$id %in% id])   # prior rows untouched
+  expect_error(direct_frame(ref, s, inst, scores_imp = si[-1, ]))
+})
+
+test_that("run_norming() norms a reference sample with skipped items from completed data", {
+  inst <- demo_inst(); inst$uncertainty$n_boot <- 10
+  sim <- simulate_reference(inst, N = 300, seed = 6)
+  set.seed(2); sim$items[cbind(sample(300, 40), sample(8, 40, TRUE))] <- NA
+  inst$missing$reference <- "impute"; inst$missing$n_imputations <- 4
+  for (v in names(inst$versions)) for (k in names(inst$versions[[v]]$scales))
+    inst$versions[[v]]$scales[[k]]$min_answered <- 0.5
+  out <- file.path(tempdir(), "np_impute"); unlink(out, recursive = TRUE)
+  suppressMessages(run_norming(inst, sim, out, stages = c("P0", "M3a"), verbose = FALSE))
+  expect_true(file.exists(file.path(out, "p0_imputed_items.rds")))
+  fr <- frame_long(readRDS(file.path(out, "frame_full_b.rds")))
+  expect_false(anyNA(fr$score))
+  expect_true(all(fr$score %in% get_scale(inst, "full_b")$grid))
+  expect_gt(length(unique(table(fr$score[fr$.draw == 1]) - table(factor(fr$score[fr$.draw == 2], levels = sort(unique(fr$score[fr$.draw == 1])))))), 1)
+  inst$missing$reference <- "listwise"
+  expect_error(suppressMessages(run_norming(inst, sim, file.path(tempdir(), "np_bad"), stages = "P0", verbose = FALSE)), "prorate")
+})

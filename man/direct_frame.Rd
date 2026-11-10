@@ -11,7 +11,8 @@ direct_frame(
   inst,
   n_boot = 0L,
   prior_mass = inst$uncertainty$prior_mass,
-  seed = NULL
+  seed = NULL,
+  scores_imp = NULL
 )
 
 frequency_frame(
@@ -38,6 +39,11 @@ scores are snapped to the grid) and optionally `age` and `gender`.}
 cell; 0 switches the prior off.}
 
 \item{seed}{Random seed; derived from the scale name when `NULL`.}
+
+\item{scores_imp}{Optional matrix of scores from completed data sets
+([impute_items()]), one row per row of `ref` and one column per
+imputation. Draw `r` then uses column `((r - 1) mod M) + 1` instead of
+`ref$score`, which only decides who is in the sample.}
 
 \item{freq}{Tibble with columns `score` (raw metric), `count` (weighted
 counts allowed) and the cell variables of the instrument (`gender`,

@@ -290,7 +290,9 @@ fit_transfer <- function(outcome, dat, s, inst, exclude = NULL,
 #' @rdname bridge_scores
 #' @param fit Transfer model (`fit_transfer()`).
 #' @param pred_frame Prediction frame of the reference sample: `id`, `age`,
-#'   `gender`, `weight`, the bridge columns and `sample`.
+#'   `gender`, `weight`, the bridge columns and `sample`; or a list of such
+#'   frames, one per completed data set of the reference sample
+#'   ([impute_items()]), over which the posterior draws are spread evenly.
 #' @param n_draws Number of posterior predictive draws per respondent.
 #' @param level Level of `sample` at which the reference sample is projected:
 #'   a donor sample, or `"average"` (the mean of the sample effects over all
@@ -311,30 +313,36 @@ project_outcome <- function(fit, pred_frame, s, n_draws = 500, level = NULL,
     stop("This transfer fit was made by normpipe 0.2.3 (observed items without imputation ",
          "model). Move the cached fit away and refit it with normpipe >= 0.2.4.")
   known <- info$known_items
-  if (is_bb) {
-    bb <- bb_scale(s, known = known, values = info$range_units)
-    pred_frame$y_trials <- bb$trials
-  }
-  if (identical(level, "average")) {
-    pp <- predict_average_level(fit, pred_frame, n_draws, lv_all)
-  } else {
-    if (!is.null(level)) {
-      if (!level %in% lv_all) stop("Projection level '", level, "' is not a donor sample (",
-                                   paste(lv_all, collapse = ", "), ").")
-      pred_frame$sample <- factor(level, levels = lv_all)
+  bb <- if (is_bb) bb_scale(s, known = known, values = info$range_units)
+  if (!is.null(level) && !identical(level, "average") && !level %in% lv_all)
+    stop("Projection level '", level, "' is not a donor sample (",
+         paste(lv_all, collapse = ", "), ").")
+  # one prediction frame, or one per completed data set of the reference
+  # sample (impute_items()): the posterior draws are spread over the frames
+  frames <- if (inherits(pred_frame, "data.frame")) list(pred_frame) else pred_frame
+  ids <- sample(seq_len(brms::ndraws(fit)), min(n_draws, brms::ndraws(fit)))
+  M <- min(length(frames), length(ids))
+  chunk <- split(ids, rep(seq_len(M), length.out = length(ids)))
+  pp <- do.call(rbind, map(seq_len(M), \(m) {
+    pf <- frames[[m]]
+    if (is_bb) pf$y_trials <- bb$trials
+    if (identical(level, "average")) {
+      x <- predict_average_level(fit, pf, levels = lv_all, ids = chunk[[m]])
+    } else {
+      if (!is.null(level)) pf$sample <- factor(level, levels = lv_all)
+      x <- brms::posterior_predict(fit, newdata = pf, draw_ids = chunk[[m]])  # draws x persons
     }
-    pp <- brms::posterior_predict(fit, newdata = pred_frame, ndraws = n_draws)  # draws x persons
-  }
-  if (is_bb) {
-    pp <- pp + bb$offset
-    if (length(known)) pp <- pp + observed_part(pred_frame, info, wt = rep(1, length(known)), D = nrow(pp))
-    pp <- pp * bb$unit_per_sum                                  # summed units -> raw metric
-  } else if (length(known)) {
-    # latent rest, censored at its bounds, plus the observed part
-    pp <- pmin(pmax(pp, info$rest[["min"]]), info$rest[["max"]]) +
-      observed_part(pred_frame, info, D = nrow(pp))
-  }
-  draws_to_frame(pp, pred_frame, s, bootstrap_weights)
+    if (is_bb) {
+      x <- x + bb$offset
+      if (length(known)) x <- x + observed_part(pf, info, wt = rep(1, length(known)), D = nrow(x))
+      x * bb$unit_per_sum                                       # summed units -> raw metric
+    } else if (length(known)) {
+      # latent rest, censored at its bounds, plus the observed part
+      pmin(pmax(x, info$rest[["min"]]), info$rest[["max"]]) +
+        observed_part(pf, info, D = nrow(x))
+    } else x
+  }))
+  draws_to_frame(pp, frames[[1]], s, bootstrap_weights)
 }
 
 #' Draw frame from a draws x persons matrix of latent predictions
@@ -363,8 +371,8 @@ draws_to_frame <- function(pp, pred_frame, s, bootstrap_weights = FALSE) {
 #' skew normal) are taken from the same draw. Censoring plays no role in the
 #' prediction of the latent value.
 #' @noRd
-predict_average_level <- function(fit, pred_frame, n_draws, levels) {
-  ids <- sample(seq_len(brms::ndraws(fit)), min(n_draws, brms::ndraws(fit)))
+predict_average_level <- function(fit, pred_frame, n_draws = NULL, levels, ids = NULL) {
+  ids <- ids %||% sample(seq_len(brms::ndraws(fit)), min(n_draws, brms::ndraws(fit)))
   mu <- Reduce(`+`, map(levels, \(lv) {
     nd <- pred_frame; nd$sample <- factor(lv, levels = levels)
     brms::posterior_linpred(fit, newdata = nd, dpar = "mu", draw_ids = ids)
@@ -394,8 +402,12 @@ predict_average_level <- function(fit, pred_frame, n_draws, levels) {
 #' @noRd
 project_frame <- function(o, s, inst, out_dir, suffix = "") {
   fit <- readRDS(file.path(out_dir, paste0("transfer_", o, suffix, ".rds")))
-  pred <- readRDS(file.path(out_dir, "m2_prediction_frame.rds"))
-  pred <- pred[!is.na(pred$age) & !is.na(pred$gender), ]
+  f_imp <- file.path(out_dir, "m2_prediction_frames_imputed.rds")
+  pred <- if (file.exists(f_imp)) readRDS(f_imp) else
+    list(readRDS(file.path(out_dir, "m2_prediction_frame.rds")))
+  ok <- !is.na(pred[[1]]$age) & !is.na(pred[[1]]$gender)
+  pred <- map(pred, \(p) p[ok, ])
+  if (length(pred) == 1) pred <- pred[[1]]
   set.seed(sum(utf8ToInt(o)))
   project_outcome(fit, pred, s, n_draws = inst$transfer$n_draws %||% 500,
                   level = inst$transfer$projection_level %||% NULL,
@@ -404,12 +416,12 @@ project_frame <- function(o, s, inst, out_dir, suffix = "") {
 
 #' Stage M2 of run_norming(): donor frame, transfer fits, prediction frame
 #' @noRd
-run_transfer_stage <- function(inst, reg, ref, ref_scores, out_dir, say = message) {
+run_transfer_stage <- function(inst, reg, ref, ref_scores, out_dir, say = message, ref_imp = NULL) {
   donors <- inst$donors_data
   if (is.null(donors)) stop("Transfer is enabled but no donor samples were supplied ",
                             "(inst$donors_data <- list(meta, items)).")
   need <- reg$outcome[reg$route == "transfer"]
-  cross <- intersect(unlist(inst$transfer$crosscheck), reg$outcome[reg$route != "transfer"])
+  cross <- intersect(as.character(unlist(inst$transfer$crosscheck)), reg$outcome[reg$route != "transfer"])
   if (!length(need) && !length(cross)) return(invisible(NULL))
   dm <- as_tibble(donors$meta)
   lv <- inst$transfer$reference_level %||% levels(factor(dm$sample))[1]
@@ -421,10 +433,14 @@ run_transfer_stage <- function(inst, reg, ref, ref_scores, out_dir, say = messag
   if (!is.null(ref_scores))
     donor_frame <- donor_frame %>% filter(between(.data$age, min(ref_scores$age, na.rm = TRUE), max(ref_scores$age, na.rm = TRUE)))
   saveRDS(donor_frame, file.path(out_dir, "m2_donor_frame.rds"))
-  pred <- bind_cols(ref_scores %>% select("id", "age", "gender", "weight"),
-                    bridge_scores(ref$items, inst)[match(ref_scores$id, ref$meta$id), ]) %>%
+  pred_of <- function(items) bind_cols(ref_scores %>% select("id", "age", "gender", "weight"),
+                    bridge_scores(items, inst)[match(ref_scores$id, ref$meta$id), ]) %>%
     mutate(gender = factor(as.character(.data$gender), levels = g_lv),
            sample = factor(lv, levels = levels(dm$sample)))
+  pred <- pred_of(ref$items)
+  # completed data sets of the reference sample: one prediction frame each
+  f_imp <- file.path(out_dir, "m2_prediction_frames_imputed.rds")
+  if (!is.null(ref_imp)) saveRDS(map(ref_imp, pred_of), f_imp) else if (file.exists(f_imp)) file.remove(f_imp)
   n_na <- sum(is.na(pred$age) | is.na(pred$gender))
   if (n_na) say("M2: ", n_na, " reference respondent(s) without age or with a gender ",
                 "category absent from the donor samples are not projected")

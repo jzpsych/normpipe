@@ -63,6 +63,10 @@
 #' @param prior_mass Effective number of pseudo-observations per reporting
 #'   cell; 0 switches the prior off.
 #' @param seed Random seed; derived from the scale name when `NULL`.
+#' @param scores_imp Optional matrix of scores from completed data sets
+#'   ([impute_items()]), one row per row of `ref` and one column per
+#'   imputation. Draw `r` then uses column `((r - 1) mod M) + 1` instead of
+#'   `ref$score`, which only decides who is in the sample.
 #' @return A draw frame (tibble, see Details).
 #' @examples
 #' inst <- read_instrument(system.file("instruments/demo7/demo7.yml",
@@ -74,10 +78,17 @@
 #' @export
 direct_frame <- function(ref, s, inst, n_boot = 0L,
                          prior_mass = inst$uncertainty$prior_mass,
-                         seed = NULL) {
+                         seed = NULL, scores_imp = NULL) {
   stopifnot(all(c("id", "weight", "score") %in% names(ref)))
+  keep <- !is.na(ref$score) & !is.na(ref$weight)
+  if (!is.null(scores_imp)) {
+    scores_imp <- as.matrix(scores_imp)
+    stopifnot(nrow(scores_imp) == nrow(ref))
+    scores_imp <- scores_imp[keep, , drop = FALSE]
+    if (anyNA(scores_imp)) stop("direct_frame(): imputed scores are missing for respondents with a score.")
+  }
   obs <- ref %>%
-    filter(!is.na(.data$score), !is.na(.data$weight)) %>%
+    filter(keep) %>%
     transmute(id = as.character(.data$id),   # prior rows carry character ids
               age = if ("age" %in% names(ref)) .data$age else NA_real_,
               gender = if ("gender" %in% names(ref)) as.character(.data$gender) else NA_character_,
@@ -85,8 +96,17 @@ direct_frame <- function(ref, s, inst, n_boot = 0L,
               score = snap_to_grid(.data$score, s),
               shape = 1)
   obs <- add_age_group(obs, inst)
+  n_person <- nrow(obs)
   if (prior_mass > 0) obs <- bind_rows(obs, prior_rows(obs, s, inst, prior_mass))
-  bootstrap_frame(obs, n_boot, seed %||% sum(utf8ToInt(paste0("direct_", s$version, "_", s$id))))
+  fr <- bootstrap_frame(obs, n_boot, seed %||% sum(utf8ToInt(paste0("direct_", s$version, "_", s$id))))
+  if (!is.null(scores_imp)) {
+    # draw r takes the scores of completed data set ((r - 1) mod M) + 1
+    pos <- (seq_len(nrow(fr)) - 1L) %% nrow(obs) + 1L
+    person <- pos <= n_person
+    m <- (fr$.draw[person] - 1L) %% ncol(scores_imp) + 1L
+    fr$score[person] <- snap_to_grid(scores_imp[cbind(pos[person], m)], s)
+  }
+  fr
 }
 
 #' @rdname direct_frame

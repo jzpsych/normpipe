@@ -95,7 +95,7 @@ run_norming <- function(inst, ref = NULL, out_dir, freq = NULL, calib = NULL,
 
   # ---- P0: reference scores, raking, routes -------------------------------
   observed_items <- integer(0)
-  ref_scores <- NULL
+  ref_scores <- NULL; ref_imp <- NULL; scores_imp <- NULL
   if (!is.null(ref)) {
     meta <- as_tibble(ref$meta)
     if (!"weight" %in% names(meta)) meta$weight <- 1
@@ -118,6 +118,23 @@ run_norming <- function(inst, ref = NULL, out_dir, freq = NULL, calib = NULL,
     sc <- score_scales(ref$items, inst, partial = TRUE)
     ref_scores <- bind_cols(meta, sc[match(meta$id, ref$meta$id), ])
     saveRDS(ref_scores, cache("p0_reference_scores"))
+    # skipped items: completed data sets (missing$reference: impute)
+    if (!inst$missing$reference %in% c("prorate", "impute"))
+      stop("missing$reference must be 'prorate' or 'impute'.")
+    if (identical(inst$missing$reference, "impute")) {
+      f <- cache("p0_imputed_items")
+      if (file.exists(f)) ref_imp <- readRDS(f) else {
+        ref_imp <- impute_items(ref$items, inst, M = inst$missing$n_imputations,
+                                seed = sum(utf8ToInt(inst$id)))
+        saveRDS(ref_imp, f)
+      }
+      n_imp <- attr(ref_imp, "n_imputed")
+      if (sum(n_imp) == 0) ref_imp <- NULL else {
+        say("P0: ", sum(n_imp), " skipped item response(s) imputed in ", length(ref_imp),
+            " completed data sets")
+        scores_imp <- map(ref_imp, \(d) score_scales(d, inst, partial = TRUE)[match(meta$id, ref$meta$id), ])
+      }
+    }
   }
   routes <- scale_routes(inst, observed_items)
   routes$route[routes$outcome %in% names(freq %||% list())] <- "frequency"
@@ -153,7 +170,7 @@ run_norming <- function(inst, ref = NULL, out_dir, freq = NULL, calib = NULL,
   # ---- M2: transfer (optional) -----------------------------------------------
   if ("M2" %in% stages && isTRUE(inst$transfer$enabled)) {
     if (!exists("run_transfer_stage")) stop("transfer.R is not available")
-    run_transfer_stage(inst, reg, ref, ref_scores, out_dir, say)
+    run_transfer_stage(inst, reg, ref, ref_scores, out_dir, say, ref_imp = ref_imp)
   }
 
   # ---- frames per outcome ---------------------------------------------------
@@ -165,7 +182,8 @@ run_norming <- function(inst, ref = NULL, out_dir, freq = NULL, calib = NULL,
     fr <- switch(route,
       direct = direct_frame(ref_scores %>% transmute(.data$id, .data$age, .data$gender,
                                                      .data$weight, score = .data[[o]]),
-                            s, inst, n_boot = n_boot),
+                            s, inst, n_boot = n_boot,
+                            scores_imp = if (!is.null(scores_imp)) sapply(scores_imp, \(x) x[[o]])),
       frequency = frequency_frame(freq[[o]], s, inst, n_boot = n_boot),
       transfer = project_frame(o, s, inst, out_dir))
     saveRDS(frame_compact(fr), f)

@@ -17,6 +17,7 @@ fit_transfer(
   formula = NULL,
   sigma = NULL,
   family = NULL,
+  phi = NULL,
   adapt_delta = NULL,
   max_treedepth = NULL,
   file = NULL,
@@ -52,8 +53,11 @@ items of the outcome itself); default from [transfer_spec()].}
 `{bridge}` in `formula` stands for the bridge predictors. Default from
 [transfer_spec()].}
 
-\item{family}{`"gaussian"` or `"skew_normal"` (the latent distribution of
-the interval-censored likelihood).}
+\item{family}{`"gaussian"`, `"skew_normal"` (latent distribution of the
+interval-censored likelihood) or `"beta_binomial"` (summed score).}
+
+\item{phi}{Right-hand side of the precision model of the beta-binomial;
+default from [transfer_spec()].}
 
 \item{adapt_delta, max_treedepth}{Sampler settings passed to brms.}
 
@@ -65,7 +69,9 @@ the interval-censored likelihood).}
 \item{fit}{Transfer model (`fit_transfer()`).}
 
 \item{pred_frame}{Prediction frame of the reference sample: `id`, `age`,
-`gender`, `weight`, the bridge columns and `sample`.}
+`gender`, `weight`, the bridge columns and `sample`; or a list of such
+frames, one per completed data set of the reference sample
+([impute_items()]), over which the posterior draws are spread evenly.}
 
 \item{n_draws}{Number of posterior predictive draws per respondent.}
 
@@ -94,17 +100,29 @@ predicts every such scale score through a Bayesian distributional
 regression fitted with brms. By default the bridge scores, `s(age)`,
 `gender` and `sample` predict the score with an interval-censored normal
 likelihood, and `sigma` depends on the mean bridge score and `s(age)`. The
-mean model, the sigma model and the latent distribution (`gaussian` or
-`skew_normal`) are configurable (`transfer$formula`, `transfer$sigma`,
-`transfer$family`, per outcome under `transfer$outcomes`), e.g.
+mean model, the sigma model and the likelihood family are configurable
+(`transfer$formula`, `transfer$sigma`, `transfer$family`, per outcome
+under `transfer$outcomes`), e.g.
 `"{bridge} + s(age, by = gender) + gender + sample"` for gender-specific
-age trajectories; `{bridge}` stands for the bridge predictors. The
-posterior predictive draws for every reference respondent, snapped to the
-attainable scores, form the draw frame of the scale. [run_norming()] runs
-these steps in stage `M2`; the donor samples are supplied as
-`inst$donors_data <- list(meta, items)` with a column `meta$sample`.
+age trajectories; `{bridge}` stands for the bridge predictors.
 }
 \details{
+Families: `gaussian` (default) and `skew_normal` model the score as
+interval-censored on a latent continuous scale, with `sigma` (and, for
+the skew normal, `alpha`) as distributional parameters. `beta_binomial`
+models the summed score in integer units directly,
+`sum | trials(max sum) ~ ...` with a logit link on the mean and the
+precision `phi` modelled by `transfer$phi` (default: the sigma formula).
+It needs no censoring, predicts on the attainable scores and has the
+sign-changing skewness of a bounded scale built in (right-skewed near the
+floor, left-skewed near the ceiling). It is available for scales whose
+attainable scores form an arithmetic sequence (`sum`, `mean`, and
+`mean_of_means` with equal component lengths), not for dense scales.
+The posterior predictive draws for every reference respondent, snapped to
+the attainable scores, form the draw frame of the scale. [run_norming()] runs
+these steps in stage `M2`; the donor samples are supplied as
+`inst$donors_data <- list(meta, items)` with a column `meta$sample`.
+
 The Stan backend is `transfer$backend` of the instrument, by default
 cmdstanr when installed and rstan otherwise. cmdstanr needs an installed
 CmdStan (`cmdstanr::install_cmdstan()`).

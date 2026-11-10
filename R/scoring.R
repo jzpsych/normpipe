@@ -141,3 +141,88 @@ summed_values <- function(idx, s, inst) {
 sum_to_raw <- function(S, s) {
   if (s$metric == "sum") S * s$unit else S * s$unit / s$n_items
 }
+
+#' Impute skipped items of the reference sample
+#'
+#' A respondent of the reference sample who skipped single items stays in the
+#' sample (the inclusion rule is `min_answered` of each scale). With
+#' `missing$reference: impute` in the instrument, [run_norming()] replaces each
+#' skipped item by a draw from its distribution in the reference sample given
+#' the answered items of its block, in `missing$n_imputations` completed data
+#' sets. Every scale score, bridge predictor and observed part of a transfer
+#' outcome is then computed from the completed items, and each draw of a draw
+#' frame uses one of the completed data sets, so that the norm band carries
+#' the imputation uncertainty. With `missing$reference: prorate` (default)
+#' scores are computed from the answered items.
+#'
+#' The block of an item is its bridge predictor (`transfer$bridge`) when the
+#' instrument has one that contains the item, otherwise the shortest scale
+#' that contains it. The conditioning value is the rounded mean value of the
+#' answered other items of the block. The conditional distributions are
+#' estimated from the respondents who answered the item (counts + 0.5); when
+#' no other item of the block is answered, or the conditioning value does not
+#' occur among them, the marginal distribution is used.
+#'
+#' @param dat Data frame with item columns (raw response codes).
+#' @param inst Instrument ([read_instrument()]).
+#' @param M Number of completed data sets.
+#' @param seed Random seed.
+#' @return List of `M` data frames like `dat`, with the missing responses of
+#'   the item columns filled in; attribute `n_imputed` gives the number of
+#'   imputed responses per item column.
+#' @examples
+#' inst <- read_instrument(system.file("instruments/demo7/demo7.yml",
+#'                                     package = "normpipe"))
+#' sim <- simulate_reference(inst, N = 100)
+#' sim$items[1:5, 1] <- NA
+#' imp <- impute_items(sim$items, inst, M = 3)
+#' sapply(imp, function(d) d[1:5, 1])
+#' @export
+impute_items <- function(dat, inst, M = inst$missing$n_imputations %||% 20, seed = 1) {
+  present <- inst$items$item[inst$items$col %in% names(dat)]
+  idx <- item_indices(dat, inst, items = present)
+  vals <- as.matrix(item_values(idx, inst, items = present))
+  cols <- inst$items$col[match(present, inst$items$item)]
+  colnames(vals) <- cols
+  blocks <- imputation_blocks(inst, present)
+  n_imp <- colSums(is.na(vals))
+  out <- rep(list(dat), M)
+  if (!any(n_imp > 0)) return(structure(out, n_imputed = n_imp))
+  set.seed(seed)
+  for (j in which(n_imp > 0)) {
+    it <- present[j]
+    cats <- inst$items$categories[[match(it, inst$items$item)]]
+    partners <- setdiff(blocks[[as.character(it)]], it)
+    pc <- cols[match(partners, present)]
+    key <- if (length(pc)) round(rowMeans(vals[, pc, drop = FALSE], na.rm = TRUE)) else rep(NA_real_, nrow(vals))
+    key[is.nan(key)] <- NA
+    k <- idx[[cols[j]]] + 1L                         # category position, NA = skipped
+    obs <- !is.na(k)
+    marg <- tabulate(k[obs], length(cats)) + 0.5
+    keys <- sort(unique(key[obs & !is.na(key)]))
+    cond <- map(keys, \(q) tabulate(k[obs & !is.na(key) & key == q], length(cats)) + 0.5)
+    na <- which(!obs)
+    draws <- matrix(NA_integer_, length(na), M)
+    for (r in seq_along(na)) {
+      q <- match(key[na[r]], keys)
+      pr <- if (is.na(q)) marg else cond[[q]]
+      draws[r, ] <- sample.int(length(cats), M, replace = TRUE, prob = pr)
+    }
+    for (m in seq_len(M)) out[[m]][[cols[j]]][na] <- cats[draws[, m]]
+  }
+  structure(out, n_imputed = n_imp)
+}
+
+#' Block of items used to impute each item (bridge predictor or shortest scale)
+#' @noRd
+imputation_blocks <- function(inst, present) {
+  br <- if (isTRUE(inst$transfer$enabled) || !is.null(inst$transfer$bridge)) map(inst$transfer$bridge, "items") else list()
+  scales <- unlist(map(inst$versions, \(v) map(v$scales, "items")), recursive = FALSE)
+  scales <- scales[map_lgl(scales, \(x) all(x %in% present))]
+  scales <- scales[order(lengths(scales))]
+  set_names(map(present, \(it) {
+    b <- detect(br, \(x) it %in% x && all(x %in% present))
+    if (is.null(b)) b <- detect(scales, \(x) it %in% x && length(x) > 1)
+    as.integer(b %||% it)
+  }), as.character(present))
+}

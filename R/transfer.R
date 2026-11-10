@@ -117,15 +117,25 @@ transfer_spec <- function(inst, outcome) {
               family = "gaussian",
               adapt_delta = 0.95, max_treedepth = 10,
               chains = 4, iter = 2000, prior_b = NULL, prior_b_phi = NULL,
-              priors = NULL, init = NULL)
+              priors = NULL, init = NULL, select_rhat = 1.01)
   top <- tr[intersect(names(def), names(tr))]
   spec <- modifyList(def, top)
   ov <- tr$outcomes[[outcome]]
   if (!is.null(ov)) spec <- modifyList(spec, ov)
-  spec$family <- match.arg(spec$family, c("gaussian", "skew_normal", "beta_binomial"))
+  # family: one family, or several candidates among which run_transfer_stage()
+  # chooses by LOO (see select_transfer_family()); spec$family is the first
+  fams <- unique(unlist(spec$family))
+  bad <- setdiff(fams, c("gaussian", "skew_normal", "beta_binomial"))
+  if (length(bad) || !length(fams))
+    stop("transfer$family must be gaussian, skew_normal or beta_binomial (or a list of them); got ",
+         paste(bad, collapse = ", "))
+  spec$families <- fams
+  spec$family <- fams[1]
   spec$phi <- spec$phi %||% spec$sigma
-  # regression coefficients: the logit scale of the beta-binomial needs a wider prior
-  spec$prior_b <- spec$prior_b %||% if (spec$family == "beta_binomial") "normal(0, 1.5)" else "normal(0, 1)"
+  # regression coefficients: the logit scale of the beta-binomial needs a wider
+  # prior; the default follows the family of each fit (prior_b_user: as configured)
+  spec$prior_b_user <- spec$prior_b
+  spec$prior_b <- spec$prior_b %||% default_prior_b(spec$family)
   # coefficients of the log precision of the beta-binomial (brms default: flat)
   spec$prior_b_phi <- spec$prior_b_phi %||% "normal(0, 2.5)"
   # further priors: list of {prior, class, dpar, coef}; they replace a default
@@ -240,12 +250,16 @@ fit_transfer <- function(outcome, dat, s, inst, exclude = NULL,
                   stats::as.formula(paste0("sigma ~ ", sigma)))
     fam <- switch(family, gaussian = stats::gaussian(), skew_normal = brms::skew_normal())
     # Initial values: the intercepts start at the location and log scale of the
-    # outcome (other parameters random). Without them, the censored likelihood
-    # of an outcome far from zero (e.g. a sum score) can be -Inf at every random
-    # initial value, notably for the skew normal, whose lcdf underflows early.
+    # outcome, all other parameters at zero (lower-bounded ones at one).
+    # Without them, the censored likelihood of an outcome far from zero (e.g. a
+    # sum score) can be -Inf at every random initial value, notably for the
+    # skew normal, whose lcdf underflows early. The list is complete: rstan
+    # fails on some models when only part of the parameters is given
+    # ("no more scalars to read").
     y_mid <- (dat$cens_lo + dat$cens_hi) / 2
-    init_fun <- function() list(Intercept = mean(y_mid, na.rm = TRUE) + stats::rnorm(1, 0, 0.05),
-                                Intercept_sigma = log(stats::sd(y_mid, na.rm = TRUE)) + stats::rnorm(1, 0, 0.05))
+    init_fun <- full_init(f, dat, fam,
+                          list(Intercept = mean(y_mid, na.rm = TRUE),
+                               Intercept_sigma = log(stats::sd(y_mid, na.rm = TRUE))))
   }
   if (!is.null(spec$init)) init_fun <- if (identical(spec$init, "random")) NULL else 0
   dots <- list(...)
@@ -422,11 +436,78 @@ run_transfer_stage <- function(inst, reg, ref, ref_scores, out_dir, say = messag
     if (file.exists(paste0(f, ".rds"))) next
     s <- get_scale(inst, o)
     sp <- transfer_spec(inst, o)
-    say("M2 ", names(todo)[i], ": fitting transfer model (", sp$family,
-        if (length(sp$exclude)) paste0(", without ", paste(sp$exclude, collapse = "/")), ")")
-    fit_transfer(o, donor_frame, s, inst, file = f)
+    fams <- sp$families
+    # a dense scale (no count structure) cannot be beta-binomial
+    if ("beta_binomial" %in% fams && length(fams) > 1 &&
+        inherits(try(bb_scale(s), silent = TRUE), "try-error"))
+      fams <- setdiff(fams, "beta_binomial")
+    excl <- if (length(sp$exclude)) paste0(", without ", paste(sp$exclude, collapse = "/")) else ""
+    if (length(fams) == 1) {
+      say("M2 ", names(todo)[i], ": fitting transfer model (", fams, excl, ")")
+      fit_transfer(o, donor_frame, s, inst, family = fams, file = f)
+      next
+    }
+    fits <- list()
+    for (fam in fams) {
+      ff <- paste0(f, "__", fam)
+      if (!file.exists(paste0(ff, ".rds")))
+        say("M2 ", names(todo)[i], ": fitting candidate ", fam, excl)
+      fits[[fam]] <- fit_transfer(o, donor_frame, s, inst, family = fam, file = ff)
+    }
+    sel <- select_transfer_family(fits, rhat_max = sp$select_rhat %||% 1.01)
+    sel$outcome <- names(todo)[i]
+    saveRDS(sel, paste0(f, "_selection.rds"))
+    best <- sel$family[sel$chosen]
+    say("M2 ", names(todo)[i], ": ", best, " chosen by LOO (",
+        paste(sprintf("%s %.1f", sel$family, sel$elpd_loo), collapse = ", "), ")")
+    file.copy(paste0(f, "__", best, ".rds"), paste0(f, ".rds"), overwrite = TRUE)
   }
+  sel_files <- file.path(out_dir, paste0("transfer_", names(todo), "_selection.rds"))
+  sel_files <- sel_files[file.exists(sel_files)]
+  if (length(sel_files))
+    readr::write_csv(bind_rows(lapply(sel_files, readRDS)) %>% select("outcome", everything()),
+                     file.path(out_dir, "m2_family_selection.csv"))
   invisible(NULL)
+}
+
+#' Choose the family of a transfer model by LOO
+#'
+#' Compares candidate fits of the same outcome (same response events: the
+#' censored likelihood gives the probability of the attainable score, the
+#' beta-binomial that of the same summed score) by their expected log
+#' predictive density (PSIS-LOO). Only candidates whose largest R-hat is at
+#' most `rhat_max` and that did not saturate the tree depth are eligible; if
+#' none is, all are, and the table says so.
+#'
+#' @param fits Named list of brms fits (names: families).
+#' @param rhat_max Largest R-hat of an eligible fit.
+#' @return Tibble with `family`, `elpd_loo`, `se_elpd_loo`, `elpd_diff`,
+#'   `se_diff` (to the chosen), `rhat_max`, `treedepth_hits`, `eligible`,
+#'   `chosen`, `pareto_k_bad` (observations with k > 0.7).
+#' @export
+select_transfer_family <- function(fits, rhat_max = 1.01) {
+  if (!requireNamespace("brms", quietly = TRUE)) stop("brms is not installed.")
+  rows <- lapply(names(fits), function(fam) {
+    fit <- fits[[fam]]
+    rh <- suppressWarnings(max(brms::rhat(fit), na.rm = TRUE))
+    np <- brms::nuts_params(fit)
+    td <- sum(np$Value[np$Parameter == "treedepth__"] >= (fit$fit@stan_args[[1]]$control$max_treedepth %||% 10))
+    lo <- suppressWarnings(brms::loo(fit))
+    list(row = tibble(family = fam, elpd_loo = lo$estimates["elpd_loo", 1],
+                      se_elpd_loo = lo$estimates["elpd_loo", 2], rhat_max = rh,
+                      treedepth_hits = td,
+                      pareto_k_bad = sum(lo$diagnostics$pareto_k > 0.7)),
+         pw = lo$pointwise[, "elpd_loo"])
+  })
+  tab <- bind_rows(lapply(rows, `[[`, "row"))
+  tab$eligible <- tab$rhat_max <= rhat_max & tab$treedepth_hits == 0
+  pool <- if (any(tab$eligible)) which(tab$eligible) else seq_len(nrow(tab))
+  best <- pool[which.max(tab$elpd_loo[pool])]
+  tab$chosen <- seq_len(nrow(tab)) == best
+  d <- lapply(rows, function(r) r$pw - rows[[best]]$pw)
+  tab$elpd_diff <- map_dbl(d, sum)
+  tab$se_diff <- map_dbl(d, \(x) sqrt(length(x)) * stats::sd(x))
+  tab
 }
 
 #' Leave-own-domain-out cross-check of a directly observed scale
@@ -493,11 +574,13 @@ bb_scale <- function(s, known = NULL, values = NULL) {
   list(unit_per_sum = s$step, offset = as.integer(round(lo)), trials = as.integer(round(hi - lo)))
 }
 
+default_prior_b <- function(family) if (family == "beta_binomial") "normal(0, 1.5)" else "normal(0, 1)"
+
 #' Priors of a transfer model: defaults plus transfer$priors
 #' @noRd
 transfer_priors <- function(spec, family) {
   key <- function(class, dpar = "", coef = "") paste(class, dpar %||% "", coef %||% "", sep = "|")
-  pr <- list(list(prior = spec$prior_b, class = "b", dpar = "", coef = ""))
+  pr <- list(list(prior = spec$prior_b_user %||% default_prior_b(family), class = "b", dpar = "", coef = ""))
   if (family == "beta_binomial") pr <- c(pr, list(list(prior = spec$prior_b_phi, class = "b", dpar = "phi", coef = "")))
   for (x in spec$priors) {
     if (is.null(x$prior) || is.null(x$class)) stop("Each entry of transfer$priors needs 'prior' and 'class'.")
@@ -506,6 +589,36 @@ transfer_priors <- function(spec, family) {
             list(list(prior = x$prior, class = x$class, dpar = x$dpar %||% "", coef = x$coef %||% "")))
   }
   do.call(c, map(pr, \(p) brms::set_prior(p$prior, class = p$class, dpar = p$dpar, coef = p$coef)))
+}
+
+#' Complete initial values for a brms model
+#'
+#' Reads the parameters block of the Stan code and returns a function that
+#' gives every parameter a value: `values` where named, otherwise zero (one for
+#' parameters with a lower bound of zero), each with a small jitter.
+#' @noRd
+full_init <- function(f, dat, fam, values = list()) {
+  code <- strsplit(brms::make_stancode(f, data = dat, family = fam), "\n")[[1]]
+  sd <- brms::make_standata(f, data = dat, family = fam)
+  i0 <- grep("^parameters \\{", code); i1 <- i0 + which(grepl("^\\}", code[-(1:i0)]))[1]
+  decl <- trimws(sub("//.*$", "", code[(i0 + 1):(i1 - 1)]))
+  decl <- decl[nzchar(decl)]
+  pars <- lapply(decl, function(d) {
+    m <- regmatches(d, regexec("^(real|vector)(<[^>]*>)?(\\[(.*)\\])?\\s+([A-Za-z0-9_]+);$", d))[[1]]
+    if (!length(m)) stop("normpipe cannot set initial values for the declaration '", d, "'.")
+    n <- if (nzchar(m[5])) as.integer(eval(parse(text = m[5]), envir = sd)) else 1L
+    pos <- grepl("lower\\s*=\\s*0", m[3])
+    list(name = m[6], vector = m[2] == "vector", n = n, base = if (pos) 1 else 0)
+  })
+  function() {
+    out <- lapply(pars, function(p) {
+      v <- values[[p$name]] %||% p$base
+      v <- rep_len(v, p$n) + stats::rnorm(p$n, 0, 0.05)
+      if (p$base == 1) v <- abs(v)
+      if (p$vector) array(v, dim = p$n) else v
+    })
+    stats::setNames(out, map_chr(pars, "name"))
+  }
 }
 
 #' Observed items of a transfer outcome

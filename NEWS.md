@@ -1,3 +1,25 @@
+# normpipe 0.2.5
+
+* `transfer$family` may list several candidates, e.g.
+  `[beta_binomial, gaussian]`. `run_transfer_stage()` then fits each
+  (`transfer_<outcome>__<family>.rds`), and `select_transfer_family()` keeps
+  the candidate with the highest PSIS-LOO expected log predictive density
+  among those that converged (largest R-hat at most `transfer$select_rhat`,
+  default 1.01, and no fit at the maximum tree depth). The comparison is on
+  the same events (the probability of the attainable score). The choice is
+  written to `m2_family_selection.csv`. Dense scales keep the censored
+  candidates only. In the PID-5 donor data, the beta-binomial fails or loses
+  for short outcomes whose unobserved rest is not overdispersed relative to
+  the binomial (e.g. two unobserved items): the precision parameter drifts to
+  infinity, and censored normal fits better (Delta ELPD +17 to +61).
+* The default prior of the mean coefficients (`prior_b`) follows the family
+  of each fit rather than the first configured family.
+* Censored transfer fits (`gaussian`, `skew_normal`) get complete initial
+  values: the intercepts at the location and log scale of the outcome, all
+  other parameters at zero (lower-bounded ones at one). With only the two
+  intercepts given, rstan failed for some models before sampling ("no more
+  scalars to read").
+
 # normpipe 0.2.4
 
 * Observed bridge items are no longer predicted in any family. 0.2.3 applied

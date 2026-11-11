@@ -174,3 +174,27 @@ run_norming(inst, ref = list(meta = ref_meta, items = ref_bridge_items),
 The transfer models are Bayesian distributional regressions fitted with brms
 (backend cmdstanr when installed, otherwise rstan). `scripts/smoke_transfer.R`
 in the source repository runs this example end to end on simulated data.
+
+## 7. Measurement invariance
+
+Pooling samples and applying one calibration to all reporting cells assumes
+that the items work in the same way in every group. `run_invariance()` tests
+this with multiple-group models for ordered items (lavaan): the items the
+reference sample answered across the samples and across the reporting cells,
+and every facet of the full instrument across the cells in the donor samples.
+Each grouping gets a configural, a scalar and a strict model, and a model is
+flagged when the CFI falls by .010 or more and the RMSEA rises by .015 or
+more or the SRMR by .010 or more (Chen, 2007).
+
+```{r, eval = FALSE}
+inv <- run_invariance(reference = list(meta = ref_meta, items = ref_bridge_items),
+                      donors = list(meta = donor_meta, items = donor_items),
+                      inst = inst, out_dir = "invariance-out")
+inv$fit        # one row per grouping and model
+inv$decision   # $ok and the summary written to invariance_decision.txt
+```
+
+The factor structure comes from the instrument (`invariance_structure()`):
+the bridge blocks are first-order factors, scales made of bridge blocks are
+second-order factors. `invariance_sequence()` runs one grouping with any
+structure, `?invariance_syntax` describes the models.

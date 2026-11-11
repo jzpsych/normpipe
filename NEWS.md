@@ -11,6 +11,15 @@ what they depend on, and a driver whose stages can be run one at a time.
   key and are recomputed. Item models are cached per scale
   (`m1_model_<outcome>.rds` instead of `m1_models.rds`), the reference
   scores, weights and completed data sets in `p0_reference.rds`.
+* **Measurement invariance.** `run_invariance()` tests the items answered by
+  the reference sample across the samples and across the reporting cells and
+  screens every facet in the donor samples (`invariance_sequence()`,
+  `invariance_screen()`, `invariance_structure()`, `invariance_syntax()`).
+  The models (configural, scalar, strict; higher-order structure written out
+  by hand, WLSMV, theta parameterization, item intercepts 0) and the rule of
+  Chen (2007) for the changes in fit (`invariance_flags()`,
+  `invariance_decision()`) are described in `?invariance_syntax`. Needs
+  lavaan (suggested); only fit indices are written.
 * **Stages.** `norming_context()` collects the inputs of a run and
   `run_stage()` runs one stage; `run_norming()` is a loop over them.
 * **Donor samples are an argument** (`run_norming(donors = )`) instead of

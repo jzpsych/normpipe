@@ -1,4 +1,4 @@
-# normpipe 0.3.0 (in development)
+# normpipe 0.3.0
 
 Consolidation release: one handling of missing responses, caches that know
 what they depend on, and a driver whose stages can be run one at a time.
@@ -44,6 +44,10 @@ what they depend on, and a driver whose stages can be run one at a time.
 * R CMD check runs on pull requests (GitHub Actions).
 
 ## Transfer module
+
+* `transfer_data()` stops before any fit when the beta-binomial family is
+  requested and `extraDistr` is missing (brms needs it for the
+  log-likelihood and the predictions of that family).
 
 * `R/transfer.R` is split by task: `transfer-spec.R` (configuration),
   `transfer-data.R` (donor and prediction frames, `transfer_data()`),

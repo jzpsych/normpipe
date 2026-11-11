@@ -131,6 +131,11 @@ transfer_data <- function(outcome, dat, inst, family = NULL,
   rhs <- expand_rhs(spec$formula, preds, dat)
   y_full <- dat[[outcome]]
   if (family == "beta_binomial") {
+    # brms needs extraDistr for the log-likelihood (LOO) and the predictions of
+    # this family; checked here, before any model is fitted
+    if (!requireNamespace("extraDistr", quietly = TRUE))
+      stop("The beta-binomial family needs the package 'extraDistr' (log-likelihood and ",
+           "predictions in brms): install.packages(\"extraDistr\").")
     bb <- bb_scale(s, known = known, values = info$range_units)
     kn <- observed_part(dat, info, wt = rep(1, length(known)))
     dat$y_sum <- as.integer(round(y_full / bb$unit_per_sum - kn)) - bb$offset

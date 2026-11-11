@@ -28,6 +28,19 @@ what they depend on, and a driver whose stages can be run one at a time.
 * Item models are calibrated on all respondents with at least one response
   to the scale (skipped items missing in the likelihood) instead of complete
   cases.
+* **Donor samples are completed like the reference sample.** With
+  `missing: {method: impute}`, donors below `min_answered` are dropped and
+  the skipped items of the others are imputed. Every transfer model is then
+  fitted with one chain per completed data set (`transfer_model_multiple()`,
+  fitted in parallel after one compilation), so the posterior carries the
+  imputation uncertainty at the cost of one fit and no donor is lost
+  scale by scale. PSIS-LOO for the family selection uses the log-likelihood
+  of each chain on its own data set. Convergence of such fits is judged within
+  the single chains (`select_rhat_chain`, default 1.05), because the R-hat
+  over the pooled chains also counts the differences between the data sets.
+* The projection builds the prediction frames of the reference sample from
+  the run itself; `m2_prediction_frame*.rds` are no longer written, and the
+  norm stages no longer depend on a rerun of stage `M2`.
 * R CMD check runs on pull requests (GitHub Actions).
 
 ## Transfer module

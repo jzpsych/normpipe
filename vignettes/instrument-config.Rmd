@@ -185,7 +185,9 @@ the bridge predictors of the transfer models and the observed part of the
 transfer outcomes. Draw `r` of a draw frame uses completed data set
 `((r - 1) mod M) + 1`, so the spread between the imputations enters the norm
 bands. The donor samples of the transfer models are completed in the same
-way. Item models are not fitted to imputed data: they use the responses as
+way (same inclusion rule, same hot deck); each chain of a transfer model is
+then fitted to one of the completed donor data sets and the chains are
+pooled. Item models are not fitted to imputed data: they use the responses as
 given, with skipped items missing in the likelihood.
 
 ## `transfer`
@@ -213,6 +215,7 @@ did not answer all items of some scales.
 | `prior_b` | prior of the regression coefficients of the mean model [`normal(0, 1)`; `normal(0, 1.5)` on the logit scale of the beta-binomial] |
 | `prior_b_phi` | prior of the coefficients of log(phi) of the beta-binomial [`normal(0, 2.5)`] |
 | `select_rhat` | largest R-hat of a candidate family that may be chosen [1.01] |
+| `select_rhat_chain` | with imputed donor samples each chain uses its own completed data set, and convergence is judged by the split R-hat within single chains; largest such value of a candidate that may be chosen [1.05] |
 | `priors` | further brms priors as a list of `{prior, class, dpar, coef}`; an entry replaces a default of the same class, dpar and coef, e.g. `[{prior: "normal(0, 0.5)", class: b, dpar: sigma}]` [none] |
 | `init` | initial values: `random` (brms default) or `0`; left out, the family default is used [beta-binomial: 0; censored families: intercepts at the location and log scale of the outcome, all else 0] |
 | `backend` | `cmdstanr` or `rstan` [cmdstanr when CmdStan is installed, otherwise rstan] |

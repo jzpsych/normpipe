@@ -22,6 +22,7 @@
 #   phi: "br_mean + s(age)"                          # precision model (beta_binomial)
 #   family: gaussian | skew_normal | beta_binomial | [candidates]
 #   select_rhat: 1.01            # largest R-hat of a candidate that may be chosen
+#   select_rhat_chain: 1.05      # the same within single chains (imputed donors)
 #   prior_b, prior_b_phi, priors # priors (see transfer_spec())
 #   init: random | 0             # initial values [family default]
 #   reference_level: quota       # first level of `sample` in the fit
@@ -45,7 +46,7 @@ transfer_families <- c("gaussian", "skew_normal", "beta_binomial")
 transfer_spec_defaults <- function() {
   list(formula = "{bridge} + s(age) + gender + sample",
        sigma = "br_mean + s(age)", phi = NULL,
-       family = "gaussian", select_rhat = 1.01,
+       family = "gaussian", select_rhat = 1.01, select_rhat_chain = 1.05,
        adapt_delta = 0.95, max_treedepth = 10, chains = 4, iter = 2000,
        prior_b = NULL, prior_b_phi = "normal(0, 2.5)", priors = NULL, init = NULL)
 }

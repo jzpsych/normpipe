@@ -4,15 +4,21 @@
 \alias{select_transfer_family}
 \title{Choose the family of a transfer model by LOO}
 \usage{
-select_transfer_family(fits, rhat_max = 1.01)
+select_transfer_family(fits, rhat_max = 1.01, rhat_chain = 1.05)
 }
 \arguments{
 \item{fits}{Named list of brms fits (names: families).}
 
 \item{rhat_max}{Largest R-hat of an eligible fit.}
+
+\item{rhat_chain}{Largest within-chain split R-hat of an eligible fit that
+was pooled over completed donor data sets ([transfer_model_multiple()]);
+for such fits `rhat_max` is reported but not used, because it also counts
+the differences between the data sets.}
 }
 \value{
 Tibble with `family`, `elpd_loo`, `se_elpd_loo`, `rhat_max`,
+  `rhat_within` (`NA` for an ordinary fit),
   `divergent`, `treedepth_hits`, `pareto_k_bad` (observations with
   k > 0.7), `eligible`, `chosen`, `elpd_diff` and `se_diff` (to the chosen).
 }

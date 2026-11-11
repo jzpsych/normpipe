@@ -344,15 +344,24 @@ frame_key <- function(ctx, o, suffix = "") {
             inst$uncertainty[c("n_boot", "prior_mass")])
 }
 
+#' Draw frame of a transfer outcome: the cached fit projected into the
+#' reference sample (one prediction frame per completed data set)
+#' @noRd
+transfer_frame <- function(ctx, o, suffix = "") {
+  inst <- ctx$inst; s <- get_scale(inst, o)
+  fit <- readRDS(rds(ctx, paste0("transfer_", o, suffix)))
+  frames <- prediction_frames(ctx$ref_scores, ctx$ref$meta$id, ctx$ref_imp %||% list(ctx$ref$items), fit, inst)
+  set.seed(sum(utf8ToInt(o)))
+  project_outcome(fit, frames, s, n_draws = inst$transfer$n_draws %||% 500,
+                  level = inst$transfer$projection_level %||% NULL,
+                  bootstrap_weights = inst$transfer$bootstrap_weights %||% TRUE)
+}
+
 draws_for <- function(ctx, o) {
   inst <- ctx$inst; s <- get_scale(inst, o)
   route <- ctx$reg$route[ctx$reg$outcome == o]
-  if (route == "transfer") {
-    # the prediction frames of the reference sample are written by stage M2
-    if (!"M2" %in% ctx$done && !is.null(ctx$donors)) { stage_m2(ctx); ctx$done <- union(ctx$done, "M2") }
-    if (!file.exists(rds(ctx, paste0("transfer_", o))))
-      stop("No transfer model for '", o, "': run stage M2 first (needs `donors`).")
-  }
+  if (route == "transfer" && !file.exists(rds(ctx, paste0("transfer_", o))))
+    stop("No transfer model for '", o, "': run stage M2 first (needs `donors`).")
   frame_long(get_cached(ctx, paste0("frame_", o), frame_key(ctx, o), function() {
     fr <- switch(route,
       direct = direct_frame(ctx$ref_scores %>% transmute(.data$id, .data$age, .data$gender,
@@ -360,7 +369,7 @@ draws_for <- function(ctx, o) {
                             s, inst, n_boot = inst$uncertainty$n_boot,
                             scores_imp = if (!is.null(ctx$scores_imp)) sapply(ctx$scores_imp, \(x) x[[o]])),
       frequency = frequency_frame(ctx$freq[[o]], s, inst, n_boot = inst$uncertainty$n_boot),
-      transfer = project_frame(o, s, inst, ctx$out_dir))
+      transfer = transfer_frame(ctx, o))
     frame_compact(fr)
   }))
 }
@@ -385,7 +394,7 @@ stage_m3a <- function(ctx) {
       if (!file.exists(rds(ctx, paste0("transfer_", o, "_lodo")))) return(NULL)
       s <- get_scale(inst, o)
       lodo <- get_cached(ctx, paste0("m3a_lodo_", o), m3a_key(ctx, o, "_lodo"), function() {
-        nm <- norms_all_cells(project_frame(o, s, inst, ctx$out_dir, suffix = "_lodo"), s, inst)
+        nm <- norms_all_cells(transfer_frame(ctx, o, suffix = "_lodo"), s, inst)
         ctx$say("C1 ", o, ": leave-own-domain-out norms done"); nm
       })
       crosscheck_table(readRDS(rds(ctx, paste0("m3a_norms_", o))), lodo) %>% mutate(outcome = o, .before = 1)

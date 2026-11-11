@@ -45,6 +45,10 @@ what they depend on, and a driver whose stages can be run one at a time.
 
 ## Transfer module
 
+* `transfer_data()` stops before any fit when the beta-binomial family is
+  requested and `extraDistr` is missing (brms needs it for the
+  log-likelihood and the predictions of that family).
+
 * `R/transfer.R` is split by task: `transfer-spec.R` (configuration),
   `transfer-data.R` (donor and prediction frames, `transfer_data()`),
   `transfer-observed.R` (observed bridge items, beta-binomial count

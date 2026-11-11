@@ -1,4 +1,4 @@
-# normpipe 0.3.0 (in development)
+# normpipe 0.3.0
 
 Consolidation release: one handling of missing responses, caches that know
 what they depend on, and a driver whose stages can be run one at a time.

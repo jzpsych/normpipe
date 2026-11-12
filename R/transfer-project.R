@@ -29,12 +29,13 @@ project_outcome <- function(fit, pred_frame, s, n_draws = 500, level = NULL,
                             bootstrap_weights = FALSE) {
   if (!requireNamespace("brms", quietly = TRUE)) stop("brms is not installed.")
   lv_all <- levels(fit$data$sample) %||% unique(as.character(fit$data$sample))
-  is_bb <- stats::family(fit)$family == "beta_binomial"
+  fam <- stats::family(fit)$family
+  is_count <- fam %in% count_families
   info <- fit$normpipe
   if (is.null(info))
     stop("This transfer fit has no record of the observed items (made before normpipe 0.2.4); refit it.")
   known <- info$known_items
-  bb <- if (is_bb) bb_scale(s, known = known, values = info$range_units)
+  bb <- if (is_count) bb_scale(s, known = known, values = info$range_units)
   if (length(lv_all) < 2) level <- NULL            # no sample effect in the model
   if (!is.null(level) && !identical(level, "average") && !level %in% lv_all)
     stop("Projection level '", level, "' is not a donor sample (",
@@ -45,14 +46,15 @@ project_outcome <- function(fit, pred_frame, s, n_draws = 500, level = NULL,
   chunk <- split(ids, rep(seq_len(M), length.out = length(ids)))
   pp <- do.call(rbind, map(seq_len(M), \(m) {
     pf <- frames[[m]]
-    if (is_bb) pf$y_trials <- bb$trials
+    if (fam == "beta_binomial") pf$y_trials <- bb$trials
     if (identical(level, "average")) {
       x <- predict_average_level(fit, pf, levels = lv_all, ids = chunk[[m]])
     } else {
       if (!is.null(level)) pf$sample <- factor(level, levels = lv_all)
       x <- brms::posterior_predict(fit, newdata = pf, draw_ids = chunk[[m]])  # draws x persons
     }
-    if (is_bb) {
+    if (is_count) {
+      if (fam == "cumulative") x <- x - 1L                      # category 1..K+1 -> sum 0..K
       x <- x + bb$offset
       if (length(known)) x <- x + observed_part(pf, info, wt = rep(1, length(known)), D = nrow(x))
       x * bb$unit_per_sum                                       # summed units -> raw metric
@@ -87,7 +89,8 @@ draws_to_frame <- function(pp, pred_frame, s, bootstrap_weights = FALSE) {
 #'
 #' The linear predictor of the mean is averaged over all donor levels of
 #' `sample` (equal weights) in every posterior draw; the other distributional
-#' parameters are taken from the same draw.
+#' parameters (and the thresholds of the cumulative model) are taken from the
+#' same draw. Returns draws on the scale of `posterior_predict()`.
 #' @noRd
 predict_average_level <- function(fit, pred_frame, n_draws = NULL, levels, ids = NULL) {
   ids <- ids %||% sample(seq_len(brms::ndraws(fit)), min(n_draws, brms::ndraws(fit)))
@@ -97,6 +100,16 @@ predict_average_level <- function(fit, pred_frame, n_draws = NULL, levels, ids =
   })) / length(levels)
   nd <- pred_frame; nd$sample <- factor(levels[1], levels = levels)
   fam <- stats::family(fit)$family
+  if (fam == "cumulative") {
+    # category (1..K+1, as posterior_predict) by inversion of
+    # P(y <= k) = logistic(disc * (threshold_k - mu))
+    disc <- brms::posterior_linpred(fit, newdata = nd, dpar = "disc", transform = TRUE, draw_ids = ids)
+    thr <- unclass(brms::as_draws_matrix(fit, variable = "^b_Intercept\\[", regex = TRUE))[ids, , drop = FALSE]
+    u <- matrix(stats::runif(length(mu)), nrow(mu), ncol(mu))
+    out <- matrix(1L, nrow(mu), ncol(mu))
+    for (k in seq_len(ncol(thr))) out <- out + (u > stats::plogis(disc * (thr[, k] - mu)))
+    return(out)
+  }
   if (fam == "beta_binomial") {
     mu <- stats::plogis(mu)
     phi <- brms::posterior_linpred(fit, newdata = nd, dpar = "phi", transform = TRUE, draw_ids = ids)

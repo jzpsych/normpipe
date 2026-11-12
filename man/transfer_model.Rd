@@ -46,7 +46,7 @@ fit_transfer(
 \item{formula, sigma, phi}{Right-hand sides of the mean, sigma and precision
 models; `{bridge}` in `formula` stands for the bridge predictors.}
 
-\item{family}{`"gaussian"`, `"skew_normal"` or `"beta_binomial"`.}
+\item{family}{`"gaussian"`, `"skew_normal"`, `"beta_binomial"` or `"cumulative"`.}
 
 \item{adapt_delta, max_treedepth}{Sampler settings.}
 }

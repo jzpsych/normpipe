@@ -131,7 +131,7 @@ transfer_model_multiple <- function(tds, backend = "rstan", ...) {
 #' @param exclude Bridge block ids to leave out of the predictors.
 #' @param formula,sigma,phi Right-hand sides of the mean, sigma and precision
 #'   models; `{bridge}` in `formula` stands for the bridge predictors.
-#' @param family `"gaussian"`, `"skew_normal"` or `"beta_binomial"`.
+#' @param family `"gaussian"`, `"skew_normal"`, `"beta_binomial"` or `"cumulative"`.
 #' @param adapt_delta,max_treedepth Sampler settings.
 #' @export
 fit_transfer <- function(outcome, dat, s, inst, exclude = NULL,
@@ -154,7 +154,25 @@ fit_convergence <- function(fit) {
   mtd <- tryCatch(fit$fit@stan_args[[1]]$control$max_treedepth, error = function(e) NULL) %||% 10
   list(rhat_max = rh, rhat_within = fit$normpipe_rhat_within %||% NA_real_,
        divergent = sum(np$Value[np$Parameter == "divergent__"]),
-       treedepth_hits = sum(np$Value[np$Parameter == "treedepth__"] >= mtd))
+       treedepth_hits = sum(np$Value[np$Parameter == "treedepth__"] >= mtd),
+       phi_plateau = phi_plateau(fit))
+}
+
+#' Share of draws of a beta-binomial fit on the plateau of large phi
+#'
+#' Where the rest is not overdispersed, phi can drift to astronomically large
+#' values (the beta-binomial then equals the binomial, and the likelihood is
+#' flat in phi). From about phi = 1e12 on, the beta-binomial probabilities
+#' that brms evaluates for the log-likelihood (extraDistr) lose precision; at
+#' 1e14 and above they are near one for every value, so that LOO of such
+#' draws is meaningless (family pilot 2026-11-12: chains stuck at phi ~ 1e19
+#' had a log-likelihood of 0 for every donor). Counts draws in which phi
+#' exceeds 1e10 for any donor; 0 for other families.
+#' @noRd
+phi_plateau <- function(fit) {
+  if (stats::family(fit)$family != "beta_binomial") return(0)
+  lp <- brms::posterior_linpred(fit, dpar = "phi")     # log(phi), draws x donors
+  mean(apply(lp, 1, max) > log(1e10))
 }
 
 #' Choose the family of a transfer model by LOO
@@ -162,9 +180,11 @@ fit_convergence <- function(fit) {
 #' Compares candidate fits of the same outcome by their expected log
 #' predictive density (PSIS-LOO). The candidates describe the same events
 #' (the censored likelihood gives the probability of the attainable score,
-#' the beta-binomial that of the same summed score), so their elpd values are
-#' comparable. Only candidates whose largest R-hat is at most `rhat_max` and
-#' that did not saturate the tree depth are eligible; if none is, all are.
+#' the beta-binomial and the cumulative model that of the same summed score),
+#' so their elpd values are comparable. Only candidates whose largest R-hat
+#' is at most `rhat_max`, that did not saturate the tree depth and that have
+#' no draw on the plateau of large phi (beta-binomial, see `phi_plateau`)
+#' are eligible; if none is, all are.
 #'
 #' @param fits Named list of brms fits (names: families).
 #' @param rhat_max Largest R-hat of an eligible fit.
@@ -174,8 +194,10 @@ fit_convergence <- function(fit) {
 #'   the differences between the data sets.
 #' @return Tibble with `family`, `elpd_loo`, `se_elpd_loo`, `rhat_max`,
 #'   `rhat_within` (`NA` for an ordinary fit),
-#'   `divergent`, `treedepth_hits`, `pareto_k_bad` (observations with
-#'   k > 0.7), `eligible`, `chosen`, `elpd_diff` and `se_diff` (to the chosen).
+#'   `divergent`, `treedepth_hits`, `phi_plateau` (share of draws with
+#'   phi > 1e10; their elpd is not interpretable), `pareto_k_bad`
+#'   (observations with k > 0.7), `eligible`, `chosen`, `elpd_diff` and
+#'   `se_diff` (to the chosen).
 #' @export
 select_transfer_family <- function(fits, rhat_max = 1.01, rhat_chain = 1.05) {
   if (!requireNamespace("brms", quietly = TRUE)) stop("brms is not installed.")
@@ -187,13 +209,14 @@ select_transfer_family <- function(fits, rhat_max = 1.01, rhat_chain = 1.05) {
                       se_elpd_loo = lo$estimates["elpd_loo", 2], rhat_max = cv$rhat_max,
                       rhat_within = cv$rhat_within,
                       divergent = cv$divergent, treedepth_hits = cv$treedepth_hits,
+                      phi_plateau = cv$phi_plateau,
                       pareto_k_bad = sum(lo$diagnostics$pareto_k > 0.7)),
          pw = lo$pointwise[, "elpd_loo"])
   })
   tab <- bind_rows(lapply(rows, `[[`, "row"))
   # fits pooled over completed donor data sets: R-hat within the chains
   tab$eligible <- ifelse(is.na(tab$rhat_within), tab$rhat_max <= rhat_max, tab$rhat_within <= rhat_chain) &
-    tab$treedepth_hits == 0
+    tab$treedepth_hits == 0 & tab$phi_plateau == 0
   pool <- if (any(tab$eligible)) which(tab$eligible) else seq_len(nrow(tab))
   best <- pool[which.max(tab$elpd_loo[pool])]
   tab$chosen <- seq_len(nrow(tab)) == best

@@ -20,10 +20,11 @@
 #   formula: "{bridge} + s(age) + gender + sample"   # mean model (right-hand side)
 #   sigma: "br_mean + s(age)"                        # sigma model (censored families)
 #   phi: "br_mean + s(age)"                          # precision model (beta_binomial)
-#   family: gaussian | skew_normal | beta_binomial | [candidates]
+#   disc: "br_mean + s(age)"                         # scale model (cumulative) [phi]
+#   family: gaussian | skew_normal | beta_binomial | cumulative | [candidates]
 #   select_rhat: 1.01            # largest R-hat of a candidate that may be chosen
 #   select_rhat_chain: 1.05      # the same within single chains (imputed donors)
-#   prior_b, prior_b_phi, priors # priors (see transfer_spec())
+#   prior_b, prior_b_phi, prior_b_disc, priors   # priors (see transfer_spec())
 #   init: random | 0             # initial values [family default]
 #   reference_level: quota       # first level of `sample` in the fit
 #   projection_level: quota      # a donor sample or "average" [reference_level]
@@ -39,16 +40,22 @@
 
 #' Families available for transfer models
 #' @noRd
-transfer_families <- c("gaussian", "skew_normal", "beta_binomial")
+transfer_families <- c("gaussian", "skew_normal", "beta_binomial", "cumulative")
+
+#' Families that model the rest as a count (summed score in integer units);
+#' they need the count structure of [bb_scale()]
+#' @noRd
+count_families <- c("beta_binomial", "cumulative")
 
 #' Keys of a transfer specification (global or per outcome)
 #' @noRd
 transfer_spec_defaults <- function() {
   list(formula = "{bridge} + s(age) + gender + sample",
-       sigma = "br_mean + s(age)", phi = NULL,
+       sigma = "br_mean + s(age)", phi = NULL, disc = NULL,
        family = "gaussian", select_rhat = 1.01, select_rhat_chain = 1.05,
        adapt_delta = 0.95, max_treedepth = 10, chains = 4, iter = 2000,
-       prior_b = NULL, prior_b_phi = "normal(0, 2.5)", priors = NULL, init = NULL)
+       prior_b = NULL, prior_b_phi = "normal(0, 2.5)", prior_b_disc = "normal(0, 1)",
+       priors = NULL, init = NULL)
 }
 
 #' Transfer specification of one outcome
@@ -65,9 +72,10 @@ transfer_spec_defaults <- function() {
 #'
 #' @param inst Instrument ([read_instrument()]).
 #' @param outcome Outcome name (`<version>_<scale>`).
-#' @return List with `formula`, `sigma`, `phi`, `family` (one family or
+#' @return List with `formula`, `sigma`, `phi`, `disc`, `family` (one family or
 #'   several candidates), `select_rhat`, `adapt_delta`, `max_treedepth`,
 #'   `chains`, `iter`, `prior_b` (`NULL`: family default), `prior_b_phi`,
+#'   `prior_b_disc`,
 #'   `priors` (further priors as `{prior, class, dpar, coef}`), `init`
 #'   (`NULL` = family default, `"random"` or 0) and `exclude`.
 #' @export
@@ -89,6 +97,7 @@ transfer_spec <- function(inst, outcome) {
          " (or a list of them); got ", paste(bad, collapse = ", "))
   spec$family <- fams
   spec$phi <- spec$phi %||% spec$sigma
+  spec$disc <- spec$disc %||% spec$phi
   spec$priors <- spec$priors %||% list()
   for (p in spec$priors)
     if (is.null(p$prior) || is.null(p$class)) stop("Each entry of transfer$priors needs 'prior' and 'class'.")
@@ -149,22 +158,28 @@ expand_rhs <- function(rhs, preds, dat = NULL) {
 
 #' Default prior of the mean coefficients for a family
 #'
-#' The logit scale of the beta-binomial needs a wider prior.
+#' The logit scale of the beta-binomial and of the cumulative model needs a
+#' wider prior.
 #' @noRd
-default_prior_b <- function(family) if (family == "beta_binomial") "normal(0, 1.5)" else "normal(0, 1)"
+default_prior_b <- function(family) if (family %in% count_families) "normal(0, 1.5)" else "normal(0, 1)"
 
 #' Priors of a transfer model: defaults plus transfer$priors
 #'
-#' Defaults: `prior_b` (family default if `NULL`) on the mean coefficients and,
-#' for the beta-binomial, `prior_b_phi` on the coefficients of log(phi) (brms
-#' default: flat). An entry of `priors` replaces a default of the same class,
-#' dpar and coef.
+#' Defaults: `prior_b` (family default if `NULL`) on the mean coefficients;
+#' for the beta-binomial `prior_b_phi` on the coefficients of log(phi) (brms
+#' default: flat); for the cumulative model `prior_b_disc` on the coefficients
+#' of log(disc), whose intercept is fixed at zero (disc = 1 at the means of
+#' the predictors; next to free thresholds it is not identified). An entry of
+#' `priors` replaces a default of the same class, dpar and coef.
 #' @noRd
 transfer_priors <- function(spec, family) {
   key <- function(class, dpar = "", coef = "") paste(class, dpar %||% "", coef %||% "", sep = "|")
   pr <- list(list(prior = spec$prior_b %||% default_prior_b(family), class = "b", dpar = "", coef = ""))
   if (family == "beta_binomial")
     pr <- c(pr, list(list(prior = spec$prior_b_phi, class = "b", dpar = "phi", coef = "")))
+  if (family == "cumulative")
+    pr <- c(pr, list(list(prior = spec$prior_b_disc, class = "b", dpar = "disc", coef = ""),
+                     list(prior = "constant(0)", class = "Intercept", dpar = "disc", coef = "")))
   for (x in spec$priors) {
     k <- key(x$class, x$dpar, x$coef)
     pr <- c(Filter(\(p) key(p$class, p$dpar, p$coef) != k, pr),

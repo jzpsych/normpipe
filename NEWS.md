@@ -1,3 +1,32 @@
+# normpipe 0.3.1
+
+* **New transfer family `cumulative`.** The unobserved rest of a scale (the
+  summed score in integer units, as for the beta-binomial) is modelled as an
+  ordinal outcome with one threshold per attainable value (brms
+  `cumulative("logit")`, `y_ord | thres(K) ~ <mean model>`). The thresholds
+  give the rest distribution any shape, including a rest that is
+  underdispersed relative to the binomial, where the beta-binomial drifts to
+  a plateau of huge `phi`. The scale model `disc ~ br_mean + s(age)` (key
+  `disc`, default: the `phi` model) has its intercept fixed at zero
+  (`constant(0)`; not identified next to free thresholds) and the prior
+  `prior_b_disc` (default `normal(0, 1)`). The family can be a candidate in
+  `transfer$family`; its PSIS-LOO describes the same events as the
+  beta-binomial and the censored families. Like the beta-binomial it needs
+  the count structure of a scale, so dense scales keep the censored
+  candidates.
+* **Family selection: beta-binomial draws on the plateau of large `phi`.**
+  Above `phi` of about 1e12 the beta-binomial probabilities that brms uses
+  for the log-likelihood (extraDistr) lose precision; at 1e14 and more they
+  are near one for every value, so that chains stuck on the plateau look far
+  better by LOO than they are (family pilot of 2026-11-12, sf_impulsivity:
+  log-likelihood 0 for every donor in chains at `phi` ~ 1e19; the third
+  production run showed the same pattern for sf_impulsivity,
+  sf_perseveration and sf_rigid_perfect, +334 to +411 elpd, but these fits
+  were already excluded by R-hat and tree depth). A fit with any draw at
+  `phi > 1e10` is now never eligible; `m2_family_selection.csv` gains the
+  column `phi_plateau` (share of such draws), and a cached selection is
+  recomputed under the new rule.
+
 # normpipe 0.3.0
 
 Consolidation release: one handling of missing responses, caches that know

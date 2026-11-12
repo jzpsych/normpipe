@@ -12,9 +12,10 @@ transfer_spec(inst, outcome)
 \item{outcome}{Outcome name (`<version>_<scale>`).}
 }
 \value{
-List with `formula`, `sigma`, `phi`, `family` (one family or
+List with `formula`, `sigma`, `phi`, `disc`, `family` (one family or
   several candidates), `select_rhat`, `adapt_delta`, `max_treedepth`,
   `chains`, `iter`, `prior_b` (`NULL`: family default), `prior_b_phi`,
+  `prior_b_disc`,
   `priors` (further priors as `{prior, class, dpar, coef}`), `init`
   (`NULL` = family default, `"random"` or 0) and `exclude`.
 }

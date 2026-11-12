@@ -41,7 +41,8 @@ transfer_key <- function(td, backend) {
 #' families (`transfer$family: [beta_binomial, gaussian]`), each candidate is
 #' fitted (`transfer_<key>__<family>`) and the best converged one by PSIS-LOO
 #' becomes `transfer_<key>`; the choice is written to
-#' `m2_family_selection.csv`. Dense scales keep the censored candidates.
+#' `m2_family_selection.csv`. Dense scales keep the censored candidates
+#' (the beta-binomial and the cumulative model need a count structure).
 #'
 #' @param inst Instrument.
 #' @param reg Scale registry (stage P0).
@@ -100,8 +101,10 @@ run_transfer_stage <- function(inst, reg, ref, ref_scores, donors = inst$donors_
     sp <- transfer_spec(inst, o)
     if (endsWith(k, "_lodo") && !length(sp$exclude)) sp$exclude <- own_bridge(inst, o)
     fams <- sp$family
-    if ("beta_binomial" %in% fams && length(fams) > 1 && !bb_possible(s))
-      fams <- setdiff(fams, "beta_binomial")
+    # count families need the count structure (not for dense scales); if no
+    # other candidate is left, bb_scale() reports the problem
+    if (any(count_families %in% fams) && !bb_possible(s) && length(setdiff(fams, count_families)))
+      fams <- setdiff(fams, count_families)
     excl <- if (length(sp$exclude)) paste0(", without ", paste(sp$exclude, collapse = "/")) else ""
     tds <- set_names(map(fams, \(fam) transfer_data(o, donor_frame, inst, family = fam, spec = sp, s = s)), fams)
     # with imputed donors: one transfer_data per completed data set and chain
@@ -123,16 +126,20 @@ run_transfer_stage <- function(inst, reg, ref, ref_scores, donors = inst$donors_
     }
     fits <- set_names(map(fams, \(fam) fit_one(fam, paste0("transfer_", k, "__", fam))), fams)
     keys <- map_chr(fams, key_of)
-    sel <- cache(paste0("transfer_", k, "_selection"), rlang::hash(list(keys, sp$select_rhat, sp$select_rhat_chain)), function() {
+    # "phi_plateau": selection rule of normpipe 0.3.1 (recomputed for cached fits)
+    sel <- cache(paste0("transfer_", k, "_selection"),
+                 rlang::hash(list(keys, sp$select_rhat, sp$select_rhat_chain, "phi_plateau")), function() {
       x <- select_transfer_family(fits, rhat_max = sp$select_rhat, rhat_chain = sp$select_rhat_chain %||% 1.05)
       x$outcome <- k
       x
     })
     best <- sel$family[sel$chosen]
     cache(paste0("transfer_", k), rlang::hash(list(keys, sp$select_rhat, best)), function() {
-      why <- ifelse(sel$eligible, "", sprintf(", not converged: R-hat %.3f, %d at max. tree depth",
+      why <- ifelse(sel$eligible, "", sprintf(", not eligible: R-hat %.3f, %d at max. tree depth%s",
                                                ifelse(is.na(sel$rhat_within), sel$rhat_max, sel$rhat_within),
-                                               sel$treedepth_hits))
+                                               sel$treedepth_hits,
+                                               ifelse(sel$phi_plateau > 0, sprintf(", %.0f%% of draws at phi > 1e10",
+                                                                                   100 * sel$phi_plateau), "")))
       say("M2 ", k, ": ", best, " chosen by LOO (",
           paste(sprintf("%s %.1f%s", sel$family, sel$elpd_loo, why), collapse = "; "), ")",
           if (!any(sel$eligible)) " -- no candidate converged, chosen among all; check the fits" else "")

@@ -98,14 +98,16 @@ transfer_prediction_frame <- function(items, ref_scores, ref_ids, donor_frame, i
 #' sample and are never predicted: the censored families (`gaussian`,
 #' `skew_normal`) model the outcome minus its weighted observed items,
 #' interval-censored at the attainable range of that rest; the beta-binomial
-#' models the sum of the unobserved items out of their range. The projection
-#' ([project_outcome()]) adds the observed part again.
+#' models the sum of the unobserved items out of their range; the cumulative
+#' model treats the same sum as an ordinal outcome (`y_ord` = sum + 1, one
+#' threshold per attainable value). The projection ([project_outcome()]) adds
+#' the observed part again.
 #'
 #' @param outcome Outcome name (`<version>_<scale>`), a column of `dat`.
 #' @param dat Donor frame ([transfer_donor_frame()]).
 #' @param inst Instrument.
-#' @param family One of `gaussian`, `skew_normal`, `beta_binomial`; default:
-#'   the first family of the specification.
+#' @param family One of `gaussian`, `skew_normal`, `beta_binomial`,
+#'   `cumulative`; default: the first family of the specification.
 #' @param spec Transfer specification ([transfer_spec()]); arguments of
 #'   [fit_transfer()] override its entries.
 #' @param s Scale specification ([get_scale()]).
@@ -148,6 +150,19 @@ transfer_data <- function(outcome, dat, inst, family = NULL,
     # start on the plateau of large phi, where the likelihood is flat in phi,
     # and never leave it; see also the proper prior on the phi coefficients.
     init <- 0
+  } else if (family == "cumulative") {
+    # The rest sum (integer units, as for the beta-binomial) as an ordinal
+    # outcome with one threshold per attainable value: the thresholds give
+    # the distribution any shape (also a rest that is underdispersed relative
+    # to the binomial), the predictors shift the latent location and `disc`
+    # scales it (log link, intercept fixed at zero by the prior).
+    bb <- bb_scale(s, known = known, values = info$range_units)
+    kn <- observed_part(dat, info, wt = rep(1, length(known)))
+    dat$y_ord <- as.integer(round(y_full / bb$unit_per_sum - kn)) - bb$offset + 1L
+    f <- brms::bf(stats::as.formula(paste0("y_ord | thres(", bb$trials, ") ~ ", rhs)),
+                  stats::as.formula(paste0("disc ~ ", expand_rhs(spec$disc, preds, dat))))
+    bfam <- brms::cumulative("logit")
+    init <- NULL                                  # brms default (random)
   } else {
     h <- s$step; lo <- s$range[1]; hi <- s$range[2]
     y <- y_full

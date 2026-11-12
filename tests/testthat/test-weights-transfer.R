@@ -179,6 +179,11 @@ test_that("several candidate families are accepted; priors follow the family of 
   expect_equal(pb("gaussian"), "normal(0, 2)")
   inst$transfer$family <- list("beta_binomial", "poisson")
   expect_error(transfer_spec(inst, "full_a"), "poisson")
+  inst$transfer$family <- list("beta_binomial", "gaussian", "cumulative")
+  sp <- transfer_spec(inst, "full_a")
+  expect_equal(sp$family, c("beta_binomial", "gaussian", "cumulative"))
+  expect_equal(pb("cumulative"), "normal(0, 1.5)")
+  expect_equal(sp$disc, sp$phi)
 })
 
 donor_sim <- function(inst, n = 300, samples = c("quota", "clin"), seed = 3) {
@@ -246,6 +251,31 @@ test_that("transfer_data builds the model without Stan (censored and beta-binomi
   expect_false(grepl("sample", paste(deparse(t1$formula$formula), collapse = "")))
   # an outcome that is a linear combination of the bridge is refused
   expect_error(transfer_data("short_a", df, inst), "linear combination")
+})
+
+test_that("cumulative family: the rest sum as an ordinal outcome with a disc model", {
+  skip_if_not_installed("brms")
+  inst <- demo_transfer()
+  df <- transfer_donor_frame(donor_sim(inst), inst)
+  tb <- transfer_data("full_a", df, inst, family = "beta_binomial")
+  tc <- transfer_data("full_a", df, inst, family = "cumulative")
+  # same rest sum as the beta-binomial (items 3 and 4, each 0..6), shifted to 1..13
+  expect_equal(tc$data$y_ord, tb$data$y_sum + 1L)
+  expect_match(paste(deparse(tc$formula$formula), collapse = ""), "y_ord \\| thres\\(12\\)")
+  expect_match(paste(deparse(tc$formula$pforms$disc), collapse = ""), "disc ~ br_mean")
+  expect_null(tc$init)
+  pr <- tc$prior
+  expect_equal(pr$prior[pr$class == "b" & pr$dpar == ""], "normal(0, 1.5)")
+  expect_equal(pr$prior[pr$class == "b" & pr$dpar == "disc"], "normal(0, 1)")
+  expect_equal(pr$prior[pr$class == "Intercept" & pr$dpar == "disc"], "constant(0)")
+  # the intercept of log(disc) is fixed (not identified next to free thresholds)
+  sc <- brms::make_stancode(tc$formula, data = tc$data, family = tc$bfamily, prior = tc$prior)
+  expect_match(sc, "Intercept_disc = 0", fixed = TRUE)
+  expect_match(sc, "cumulative_logit_lpmf", fixed = TRUE)
+  # disc without predictors: disc = 1 (fixed intercept only)
+  inst2 <- inst; inst2$transfer$disc <- "1"
+  expect_match(paste(deparse(transfer_data("full_a", df, inst2, family = "cumulative")$formula$pforms$disc),
+                     collapse = ""), "disc ~ 1")
 })
 
 test_that("prediction_frames build the frames from the reference data and the fit's levels", {

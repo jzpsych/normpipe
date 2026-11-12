@@ -20,8 +20,8 @@ transfer_data(
 
 \item{inst}{Instrument.}
 
-\item{family}{One of `gaussian`, `skew_normal`, `beta_binomial`; default:
-the first family of the specification.}
+\item{family}{One of `gaussian`, `skew_normal`, `beta_binomial`,
+`cumulative`; default: the first family of the specification.}
 
 \item{spec}{Transfer specification ([transfer_spec()]); arguments of
 [fit_transfer()] override its entries.}
@@ -44,6 +44,8 @@ Bridge items that belong to the outcome are observed in the reference
 sample and are never predicted: the censored families (`gaussian`,
 `skew_normal`) model the outcome minus its weighted observed items,
 interval-censored at the attainable range of that rest; the beta-binomial
-models the sum of the unobserved items out of their range. The projection
-([project_outcome()]) adds the observed part again.
+models the sum of the unobserved items out of their range; the cumulative
+model treats the same sum as an ordinal outcome (`y_ord` = sum + 1, one
+threshold per attainable value). The projection ([project_outcome()]) adds
+the observed part again.
 }

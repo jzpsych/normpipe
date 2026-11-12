@@ -19,14 +19,18 @@ the differences between the data sets.}
 \value{
 Tibble with `family`, `elpd_loo`, `se_elpd_loo`, `rhat_max`,
   `rhat_within` (`NA` for an ordinary fit),
-  `divergent`, `treedepth_hits`, `pareto_k_bad` (observations with
-  k > 0.7), `eligible`, `chosen`, `elpd_diff` and `se_diff` (to the chosen).
+  `divergent`, `treedepth_hits`, `phi_plateau` (share of draws with
+  phi > 1e10; their elpd is not interpretable), `pareto_k_bad`
+  (observations with k > 0.7), `eligible`, `chosen`, `elpd_diff` and
+  `se_diff` (to the chosen).
 }
 \description{
 Compares candidate fits of the same outcome by their expected log
 predictive density (PSIS-LOO). The candidates describe the same events
 (the censored likelihood gives the probability of the attainable score,
-the beta-binomial that of the same summed score), so their elpd values are
-comparable. Only candidates whose largest R-hat is at most `rhat_max` and
-that did not saturate the tree depth are eligible; if none is, all are.
+the beta-binomial and the cumulative model that of the same summed score),
+so their elpd values are comparable. Only candidates whose largest R-hat
+is at most `rhat_max`, that did not saturate the tree depth and that have
+no draw on the plateau of large phi (beta-binomial, see `phi_plateau`)
+are eligible; if none is, all are.
 }

@@ -293,8 +293,10 @@ run_norming(inst, ref = ref, donors = list(meta = donor_meta, items = donor_item
 can also be called one by one: `transfer_donor_frame()` builds the donor
 frame, `transfer_data()` defines one model (response, censoring or trials,
 formula, priors, initial values; no Stan needed), `transfer_model()` fits it
-with brms, `select_transfer_family()` compares candidate fits by PSIS-LOO,
-and `project_outcome()` projects the reference sample. For every scale that
+with brms, and `select_transfer_family()` compares candidate fits by PSIS-LOO.
+The stage `transfer` ends with the fitted models; `project_outcome()` projects
+the reference sample, which `run_norming()` does in the stage `norms`, when it
+builds the draws of a scale. For every scale that
 needs the transfer, a Bayesian distributional regression predicts the scale
 score, by default from the bridge scores, the variables of the norm groups
 (e.g. `s(age)` and `gender`) and `sample`, with an interval-censored normal

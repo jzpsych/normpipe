@@ -1,3 +1,74 @@
+# normpipe 0.4.0
+
+The package no longer assumes an instrument normed by gender and age band on
+the T metric: the groups for which norms are tabulated and the norm scale
+are part of the configuration, and stages, files and export functions are
+named after what they do. Instruments and scripts written for earlier
+versions keep working; the norms of an unchanged instrument are the same.
+
+* **Stage names.** The stages are `prepare`, `calibrate`, `transfer`,
+  `norms`, `continuous_norms`, `intervals_conditional`,
+  `intervals_integrated` and `export`; `intervals` stands for both interval
+  stages. The former names (`P0`, `M1`, `M2`, `M3a`, `M3b`, `M3c`, `M3d`,
+  `X1`) are still understood by `run_norming()` and `run_stage()`.
+* **Output folder.** The result tables are in `out_dir`, every cached
+  intermediate result in `out_dir/cache` (with `cache_manifest.csv` and
+  `superseded/`). Results are named after their content:
+  `norm_tables.csv` (was `norm_tables_long.csv`),
+  `norm_tables_continuous.csv` (`norm_tables_age_continuous.csv`),
+  `scale_registry.csv` (`p0_scale_registry.csv`), `reliability.csv`
+  (`x1_reliability.csv`), `reference_scores.rds`, `rake_diagnostics.rds`,
+  `transfer_family_selection.csv` (`m2_family_selection.csv`),
+  `transfer_crosscheck.csv` (`c1_crosscheck.csv`), `compact/` (`platform/`)
+  and `json/` (`portal/`). Cached results: `prepare_reference`,
+  `calibrate_model_<outcome>`, `norms_<outcome>`,
+  `continuous_norms_<outcome>`, `intervals_conditional_<outcome>`,
+  `intervals_integrated_<outcome>`, `transfer_<outcome>_crosscheck`.
+* **`migrate_output()`** moves an output folder of an earlier version to
+  this layout. The moved results are adopted: the next run accepts them as
+  current, so that nothing is computed again.
+* **Norm groups.** The new `groups` block names the variables whose groups
+  the norms are tabulated for: any number of categorical variables (listed
+  codes) and banded numeric variables (`breaks`), e.g.
+  `by: {gender: [m, f], age: {breaks: [18, 40, 65, Inf]}}` or
+  `by: {education: [low, mid, high]}`. `continuous` asks for kernel norms
+  along one numeric variable (`variable`, `range`, `by`, `kernel`). The
+  `cells` block of earlier versions (`gender`, `age_breaks`, `ages`,
+  `kernel`) is read as before. The reference data need the variables named
+  in `groups`; `gender` and `age` are no longer required otherwise.
+  `add_groups()` adds the band columns (`add_age_group()` is an alias),
+  `group_sources()` lists the variables. Raking, frequency input, the
+  transfer module and the invariance analyses follow the configured groups.
+* **Norm scale.** `norm_scale` sets the standard-score metric: a preset
+  (`T`, `z`, `IQ`, `stanine`, `sten`) or `{name, mean, sd, limits, digits}`.
+  The score columns of every table carry the name of the scale (`IQ`,
+  `IQ_lo`, `IQ_int_hi`, ...). The default is `T`.
+* **Exports.** `export: {formats: [long, compact, json], language: en}`
+  selects what the `export` stage writes. `export_compact()` and
+  `export_json()` replace `export_platform_tables()` and
+  `export_portal_json()`, which remain as aliases. The JSON file has English
+  keys by default; `language: de` (and `export_portal_json()`) writes the
+  German keys of earlier versions. The compact continuous tables are
+  `norms_<version>_continuous.rds`. The argument `portal_citation` of
+  `run_norming()` is now `citation`.
+* `weighted_norms_continuous()`: the argument `ages` is now `values`
+  (`ages` is still accepted); the result has one column per `by` variable
+  and a column named after the continuous variable.
+* `crosscheck_table()` works for any groups; its columns are
+  `<score>_direct`, `<score>_lo_direct`, `<score>_hi_direct`,
+  `<score>_projected`, `<score>_lo_projected`, `<score>_hi_projected`,
+  `difference` and `inside`. The cross-check fits are cached as
+  `transfer_<outcome>_crosscheck`.
+* Transfer module: the default formulas are built from the norm groups
+  (`{bridge} + s(<numeric variables>) + <categorical variables> + sample`;
+  for groups by gender and age the same formulas as before). An instrument
+  without groups gets `{bridge} + sample`. The donor data need the
+  variables of the norm groups.
+* `invariance_screen()` screens by default every scale of the first version
+  that is scored from items directly (was: scales with `level: facet`).
+* `simulate_reference()` also draws the variables of the norm groups other
+  than `age` and `gender`.
+
 # normpipe 0.3.1
 
 * **New transfer family `cumulative`.** The unobserved rest of a scale (the
@@ -18,11 +89,7 @@
   Above `phi` of about 1e12 the beta-binomial probabilities that brms uses
   for the log-likelihood (extraDistr) lose precision; at 1e14 and more they
   are near one for every value, so that chains stuck on the plateau look far
-  better by LOO than they are (family pilot of 2026-11-12, sf_impulsivity:
-  log-likelihood 0 for every donor in chains at `phi` ~ 1e19; the third
-  production run showed the same pattern for sf_impulsivity,
-  sf_perseveration and sf_rigid_perfect, +334 to +411 elpd, but these fits
-  were already excluded by R-hat and tree depth). A fit with any draw at
+  better by LOO than they are. A fit with any draw at
   `phi > 1e10` is now never eligible; `m2_family_selection.csv` gains the
   column `phi_plateau` (share of such draws), and a cached selection is
   recomputed under the new rule.
@@ -143,10 +210,10 @@ what they depend on, and a driver whose stages can be run one at a time.
   default 1.01, and no fit at the maximum tree depth). The comparison is on
   the same events (the probability of the attainable score). The choice is
   written to `m2_family_selection.csv`. Dense scales keep the censored
-  candidates only. In the PID-5 donor data, the beta-binomial fails or loses
-  for short outcomes whose unobserved rest is not overdispersed relative to
-  the binomial (e.g. two unobserved items): the precision parameter drifts to
-  infinity, and censored normal fits better (Delta ELPD +17 to +61).
+  candidates only. The beta-binomial can fail or lose for short outcomes
+  whose unobserved rest is not overdispersed relative to the binomial (e.g.
+  two unobserved items): the precision parameter drifts to infinity, and a
+  censored normal fits better.
 * The default prior of the mean coefficients (`prior_b`) follows the family
   of each fit rather than the first configured family.
 * Censored transfer fits (`gaussian`, `skew_normal`) get complete initial
@@ -161,9 +228,9 @@ what they depend on, and a driver whose stages can be run one at a time.
   this to the beta-binomial only; the censored families (`gaussian`,
   `skew_normal`) now also model the outcome minus its weighted observed items
   (censored at the attainable range of that rest), and `project_outcome()`
-  adds the observed part to every draw. Before, the censored domain models
-  predicted the full score, so items predicted themselves and 0.3-1.3 % of
-  the PID-5 domain draws fell below the respondent's own observed part.
+  adds the observed part to every draw. Before, the censored models
+  predicted the full score, so items predicted themselves and a draw could
+  fall below the respondent's own observed part.
   Item weights follow the scale metric (`sum`, `mean`, `mean_of_means`).
   The rule is fixed and has no switch.
 * An observed item the respondent skipped is no longer set to the value of
@@ -184,14 +251,13 @@ what they depend on, and a driver whose stages can be run one at a time.
   contains. These items are observed in the reference sample, so the sum of
   the outcome given the bridge is partly known and underdispersed relative to
   the binomial; the beta-binomial (overdispersion only) then lets the
-  precision parameter drift to infinity, and in the PID-5 production run 21
-  of the 46 fits of such outcomes did not converge (every iteration at the
-  maximum tree depth, R-hat up to infinity). `fit_transfer()` now models the
+  precision parameter drift to infinity, and such fits may not converge.
+  `fit_transfer()` now models the
   sum of the unobserved items only (`trials` = their range), and
   `project_outcome()` adds the respondent's observed bridge items back. A
   missing observed item takes the value of its bridge predictor (the answered
-  item of the pair). Outcomes without bridge items and the
-  leave-own-domain-out fits are unchanged.
+  item of the pair). Outcomes without bridge items and the cross-check fits
+  are unchanged.
 * Beta-binomial fits start all parameters at zero (`init = 0`; from random
   values a chain could stay on the flat plateau of large phi) and use a
   proper prior on the coefficients of log(phi), `transfer$prior_b_phi`
@@ -211,17 +277,13 @@ what they depend on, and a driver whose stages can be run one at a time.
   (`transfer$phi`, default: the sigma model). It replaces the
   interval-censored normal for bounded scales: the residual skew of a bounded
   scale changes sign with severity, which a latent normal or skew normal
-  with constant shape cannot represent. In the PID-5 donor pilot the
-  beta-binomial improved the expected log predictive density of the long
-  facets by 30 to 240 points, matched the floor shares and the upper
-  quantiles of the donors within one summed point, and ran as fast as the
-  censored model.
+  with constant shape cannot represent.
 * The family needs a count structure (sum or mean of items, or means of
-  equally long components). A dense scale (mean of facet means of unequal
-  length, tabulated on the reporting grid, e.g. the PID-5 domains) keeps
+  equally long components). A dense scale (mean of component means of unequal
+  length, tabulated on the reporting grid) keeps
   the censored normal via a per-outcome `family: gaussian`: modelled as a
   count out of the grid steps the beta-binomial loses the floor and widens
-  the upper tail (PID-5 domain pilot).
+  the upper tail.
 * `project_outcome()` converts the predicted counts back to the raw metric;
   `projection_level = "average"` draws from the beta-binomial via
   `extraDistr::rbbinom()` (new in Suggests).
@@ -231,7 +293,7 @@ what they depend on, and a driver whose stages can be run one at a time.
 # normpipe 0.2.1
 
 * `direct_frame()` coerces respondent ids to character, so that numeric ids
-  (e.g. GESIS panelist ids) can be combined with the character ids of the
+  can be combined with the character ids of the
   Dirichlet prior rows (this failed in `bind_rows()` before).
 * PID-5 instrument: `n_boot` raised from 200 to 1000. With 200 draws the
   Monte Carlo error of the point norm reached 1 to 2 T in the sparse tails
@@ -254,7 +316,7 @@ what they depend on, and a driver whose stages can be run one at a time.
 * Projection level as a parameter (`transfer$projection_level`, argument
   `level` of `project_outcome()`): any donor sample, or `"average"` (mean of
   the sample effects).
-* Leave-own-domain-out cross-check: `transfer$exclude` passes excluded bridge
+* Cross-check of the projection: `transfer$exclude` passes excluded bridge
   predictors per outcome to `fit_transfer()`; outcomes listed in
   `transfer$crosscheck` are directly observed but additionally projected
   without their own bridge items, and `run_norming()` writes the comparison

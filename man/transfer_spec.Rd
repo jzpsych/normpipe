@@ -24,9 +24,16 @@ Merges the defaults, the `transfer` block of the instrument and the
 outcome's entry under `transfer$outcomes` (a key given there replaces the
 global one as a whole). For an outcome listed under `transfer$crosscheck`,
 the bridge blocks that share items with the outcome are excluded
-(leave-own-domain-out), unless `exclude` names them explicitly.
+(the scale is projected without its own bridge items), unless `exclude`
+names them explicitly.
 }
 \details{
+The default mean model is the bridge predictors, a smooth of every numeric
+group variable, the main effect of every categorical group variable and
+the donor sample (with groups by gender and age:
+`{bridge} + s(age) + gender + sample`); the default sigma model is
+`br_mean` plus the same smooths.
+
 Defaults that depend on the family (the prior of the mean coefficients)
 are resolved per fit by [transfer_data()], because `family` may list
 several candidates.

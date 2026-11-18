@@ -1,6 +1,6 @@
 # ==============================================================================
 # transfer-project.R -- projection of the reference sample through a transfer
-# model, and the leave-own-domain-out cross-check
+# model, and the cross-check of the projection on directly observed scales
 # ==============================================================================
 
 #' Project the reference sample through a transfer model
@@ -10,8 +10,9 @@
 #' attainable scores. The result is the draw frame of the outcome.
 #'
 #' @param fit Transfer model ([transfer_model()]).
-#' @param pred_frame Prediction frame of the reference sample: `id`, `age`,
-#'   `gender`, `weight`, the bridge columns and `sample`; or a list of such
+#' @param pred_frame Prediction frame of the reference sample: `id`, the
+#'   covariates of the model (e.g. `age`, `gender`), `weight`, the bridge
+#'   columns and `sample`; or a list of such
 #'   frames, one per completed data set of the reference sample
 #'   ([impute_items()]), over which the posterior draws are spread evenly.
 #' @param s Scale specification ([get_scale()]).
@@ -23,10 +24,13 @@
 #'   every posterior draw by `weight x Exp(1)` (Bayesian bootstrap), so that
 #'   the norm band contains the sampling uncertainty of the reference sample
 #'   as well as the uncertainty of the transfer model.
+#' @param vars Columns of `pred_frame` that the draw frame carries (the
+#'   variables of the norm groups); default: every column that is neither a
+#'   bridge score, `id`, `weight` nor `sample`.
 #' @return Draw frame (see [direct_frame()]).
 #' @export
 project_outcome <- function(fit, pred_frame, s, n_draws = 500, level = NULL,
-                            bootstrap_weights = FALSE) {
+                            bootstrap_weights = FALSE, vars = NULL) {
   if (!requireNamespace("brms", quietly = TRUE)) stop("brms is not installed.")
   lv_all <- levels(fit$data$sample) %||% unique(as.character(fit$data$sample))
   fam <- stats::family(fit)$family
@@ -63,7 +67,7 @@ project_outcome <- function(fit, pred_frame, s, n_draws = 500, level = NULL,
       pmin(pmax(x, info$rest[["min"]]), info$rest[["max"]]) + observed_part(pf, info, D = nrow(x))
     } else x
   }))
-  draws_to_frame(pp, frames[[1]], s, bootstrap_weights)
+  draws_to_frame(pp, frames[[1]], s, bootstrap_weights, vars = vars)
 }
 
 #' Draw frame from a draws x persons matrix of latent predictions
@@ -71,18 +75,22 @@ project_outcome <- function(fit, pred_frame, s, n_draws = 500, level = NULL,
 #' Snaps the predictions to the attainable scores and, optionally, draws a
 #' Bayesian-bootstrap weight per person and draw.
 #' @noRd
-draws_to_frame <- function(pp, pred_frame, s, bootstrap_weights = FALSE) {
+draws_to_frame <- function(pp, pred_frame, s, bootstrap_weights = FALSE, vars = NULL) {
   n <- nrow(pred_frame); D <- nrow(pp)
   stopifnot(ncol(pp) == n)
   w <- rep(pred_frame$weight, times = D)
   if (isTRUE(bootstrap_weights)) w <- w * stats::rexp(n * D)
-  tibble(id = rep(pred_frame$id, times = D),
-         age = rep(pred_frame$age, times = D),
-         gender = rep(as.character(pred_frame$gender), times = D),
-         weight = w,
-         shape = 1,
-         .draw = rep(seq_len(D), each = n),
-         score = snap_to_grid(as.vector(t(pp)), s))
+  vars <- vars %||% grep("^(id|weight|sample|y_trials|br_.*|bi_.*)$", names(pred_frame),
+                         value = TRUE, invert = TRUE)
+  carried <- map(set_names(intersect(vars, names(pred_frame))), \(v) {
+    x <- pred_frame[[v]]
+    rep(if (is.factor(x) || is.character(x)) as.character(x) else x, times = D)
+  })
+  bind_cols(tibble(id = rep(pred_frame$id, times = D)), as_tibble(carried),
+            tibble(weight = w,
+                   shape = 1,
+                   .draw = rep(seq_len(D), each = n),
+                   score = snap_to_grid(as.vector(t(pp)), s)))
 }
 
 #' Posterior predictions at the average of the sample effects
@@ -147,45 +155,55 @@ predict_average_level <- function(fit, pred_frame, n_draws = NULL, levels, ids =
 #' @noRd
 prediction_frames <- function(ref_scores, ref_ids, items_list, fit, inst) {
   if (inherits(items_list, "data.frame")) items_list <- list(items_list)
-  g_lv <- levels(fit$data$gender) %||% unique(as.character(fit$data$gender))
   s_lv <- levels(fit$data$sample) %||% unique(as.character(fit$data$sample))
-  ok <- !is.na(ref_scores$age) & !is.na(ref_scores$gender) &
-    (!length(g_lv) | as.character(ref_scores$gender) %in% g_lv)
+  # covariates: the variables of the norm groups; a categorical one that is
+  # in the model takes the model's levels
+  covs <- intersect(group_sources(inst), names(ref_scores))
+  lv <- map(set_names(intersect(categorical_sources(inst), covs)), \(v)
+    levels(fit$data[[v]]) %||% unique(as.character(fit$data[[v]])))
+  ok <- rep(TRUE, nrow(ref_scores))
+  for (v in covs) ok <- ok & !is.na(ref_scores[[v]])
+  for (v in names(lv)) ok <- ok & (!length(lv[[v]]) | as.character(ref_scores[[v]]) %in% lv[[v]])
   map(items_list, \(items) {
-    pf <- bind_cols(ref_scores %>% select("id", "age", "gender", "weight"),
+    pf <- bind_cols(ref_scores %>% select(all_of(c("id", covs, "weight"))),
                     bridge_scores(items, inst)[match(ref_scores$id, ref_ids), ])[ok, ]
-    if (length(g_lv)) pf$gender <- factor(as.character(pf$gender), levels = g_lv)
+    for (v in names(lv)) if (length(lv[[v]])) pf[[v]] <- factor(as.character(pf[[v]]), levels = lv[[v]])
     if (length(s_lv)) pf$sample <- factor(s_lv[1], levels = s_lv)
     pf
   })
 }
 
-#' Leave-own-domain-out cross-check of a directly observed scale
+#' Cross-check of the projection on a directly observed scale
 #'
 #' Compares the norms of a directly observed scale with the norms obtained
 #' when the same scale is projected through the transfer module without its
 #' own bridge items (`transfer$crosscheck`). [run_norming()] writes the
-#' result of all cross-check outcomes to `c1_crosscheck.csv`.
+#' result of all cross-check outcomes to `transfer_crosscheck.csv`.
 #'
-#' @param direct,lodo Outputs of [norms_all_cells()] for the direct and the
-#'   projected norms of the same scale.
+#' @param direct,projected Outputs of [norms_all_cells()] for the direct and
+#'   the projected norms of the same scale.
+#' @param inst Instrument (for the name of the norm scale; default `T`).
 #' @return Tibble with the cell variables (`NA` for the overall table),
-#'   `raw`, `T_direct`, `T_lo_direct`, `T_hi_direct`, `T_lodo`, `T_lo_lodo`,
-#'   `T_hi_lodo`, `dT` (projected minus direct) and `inside` (the projected
-#'   point value lies in the band of the direct norms).
+#'   `raw`, `T_direct`, `T_lo_direct`, `T_hi_direct`, `T_projected`,
+#'   `T_lo_projected`, `T_hi_projected`, `difference` (projected minus
+#'   direct) and `inside` (the projected point value lies in the band of the
+#'   direct norms).
 #' @export
-crosscheck_table <- function(direct, lodo) {
+crosscheck_table <- function(direct, projected, inst = NULL) {
+  nn <- if (is.null(inst)) "T" else norm_name(inst)
+  direct <- rename_norm(direct, nn, "T"); projected <- rename_norm(projected, nn, "T")
+  cv <- if (!is.null(direct$cells)) names(direct$cells)[seq_len(match("raw", names(direct$cells)) - 1)] else character(0)
   flat <- function(x) {
-    bind_rows(if (!is.null(x$cells)) mutate(x$cells, gender = as.character(.data$gender),
-                                            age_group = as.character(.data$age_group)),
-              if (!is.null(x$overall)) mutate(x$overall, gender = NA_character_,
-                                              age_group = NA_character_)) %>%
+    ov <- x$overall
+    if (!is.null(ov)) for (v in cv) ov[[v]] <- NA_character_
+    bind_rows(if (!is.null(x$cells)) mutate(x$cells, across(all_of(cv), as.character)), ov) %>%
       mutate(raw_key = round(.data$raw, 8)) %>%
-      select("gender", "age_group", "raw_key", "raw", "T", "T_lo", "T_hi")
+      select(all_of(c(cv, "raw_key", "raw", "T", "T_lo", "T_hi")))
   }
-  inner_join(flat(direct), select(flat(lodo), -"raw"),
-             by = c("gender", "age_group", "raw_key"), suffix = c("_direct", "_lodo")) %>%
+  out <- inner_join(flat(direct), select(flat(projected), -"raw"),
+                    by = c(cv, "raw_key"), suffix = c("_direct", "_projected")) %>%
     select(-"raw_key") %>%
-    mutate(dT = .data$T_lodo - .data$T_direct,
-           inside = .data$T_lodo >= .data$T_lo_direct & .data$T_lodo <= .data$T_hi_direct)
+    mutate(difference = .data$T_projected - .data$T_direct,
+           inside = .data$T_projected >= .data$T_lo_direct & .data$T_projected <= .data$T_hi_direct)
+  rename_norm(out, "T", nn)
 }

@@ -26,7 +26,8 @@ frequency_frame(
 }
 \arguments{
 \item{ref}{Tibble with `id`, `weight`, `score` (raw metric; prorated
-scores are snapped to the grid) and optionally `age` and `gender`.}
+scores are snapped to the grid) and the variables of the norm groups
+(a missing variable is `NA` for everybody).}
 
 \item{s}{Scale specification ([get_scale()]).}
 
@@ -46,8 +47,9 @@ imputation. Draw `r` then uses column `((r - 1) mod M) + 1` instead of
 `ref$score`, which only decides who is in the sample.}
 
 \item{freq}{Tibble with columns `score` (raw metric), `count` (weighted
-counts allowed) and the cell variables of the instrument (`gender`,
-`age_group`) or `age` (single years). An optional column `n_obs` holds
+counts allowed) and the cell variables of the instrument (e.g. `gender`
+and `age_group`; instead of a band column the numeric variable itself,
+e.g. `age` in single years, can be given). An optional column `n_obs` holds
 the unweighted counts (default `count`); it is the gamma shape of the
 row, so that weighted counts keep the right amount of uncertainty. Rows
 of cells not covered by the configuration enter the overall table only.}
@@ -58,8 +60,9 @@ A draw frame (tibble, see Details).
 \description{
 A draw frame is the common input of all norm functions: a long tibble with
 one row per respondent (or pseudo-respondent) and draw, with columns `id`,
-`age`, `gender`, `weight`, `score`, `shape`, `.draw` (plus `age_group` when
-the instrument has age bands). Every reporting cell receives `prior_mass`
+the variables of the norm groups ([group_sources()], e.g. `age` and
+`gender`), `weight`, `score`, `shape`, `.draw` and the band column of
+every banded variable (e.g. `age_group`). Every reporting cell receives `prior_mass`
 pseudo-observations spread uniformly over the attainable scores (a
 Dirichlet prior with uniform base measure); `n_boot` Bayesian-bootstrap
 draws then replace each weight by `weight / shape * Gamma(shape)`. Summed

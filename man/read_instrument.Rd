@@ -20,12 +20,12 @@ read_instrument(path)
 An object of class `normpipe_instrument`: a list with `id`, `name`,
   `items` (item table: `item`, `col`, `categories`, `values` in integer
   units, `reverse`, `K`; attribute `unit`), `versions` (each with its
-  `scales`), `cells`, `measurement`, `transfer`, `weighting`,
-  `uncertainty` and `source` (normalised path of the YAML file).
+  `scales`), `groups` (the norm groups, see [cell_vars()]), `norm_scale`,
+  `export`, `measurement`, `transfer`, `weighting`, `uncertainty` and `source` (normalised path of the YAML file).
 }
 \description{
 Parses an instrument YAML file (or a list with the same structure), builds
-the item table, the reporting cells and every scale of every version
+the item table, the norm groups and every scale of every version
 (attainable scores, reporting grid, model), and fills in the defaults of
 the `uncertainty`, `measurement`, `transfer` and `weighting` blocks. The keys are
 documented in `vignette("instrument-config", package = "normpipe")`.

@@ -17,8 +17,9 @@ run_norming(
   donors = NULL,
   stages = STAGES,
   outcomes = NULL,
-  portal_citation = "",
-  verbose = TRUE
+  citation = "",
+  verbose = TRUE,
+  portal_citation = NULL
 )
 
 norming_context(
@@ -31,8 +32,9 @@ norming_context(
   models = NULL,
   donors = NULL,
   outcomes = NULL,
-  portal_citation = "",
-  verbose = TRUE
+  citation = "",
+  verbose = TRUE,
+  portal_citation = NULL
 )
 
 run_stage(ctx, stage)
@@ -40,17 +42,18 @@ run_stage(ctx, stage)
 \arguments{
 \item{inst}{Instrument ([read_instrument()]).}
 
-\item{ref}{Reference sample: `list(meta, items)`. `meta` has `id`, `age`,
-`gender` and optionally `weight` (unit weights otherwise); `items` holds
+\item{ref}{Reference sample: `list(meta, items)`. `meta` has `id`, the
+variables of the norm groups ([group_sources()], e.g. `age` and
+`gender`) and optionally `weight` (unit weights otherwise); `items` holds
 the item columns named `<prefix><item>`, in the same row order as `meta`.}
 
-\item{out_dir}{Output folder (caches and tables).}
+\item{out_dir}{Output folder: result tables, and the cache in `cache/`.}
 
 \item{freq}{Optional named list of frequency tables, one per outcome (see
 [frequency_frame()]); these outcomes take the frequency route.}
 
 \item{calib}{Optional calibration sample `list(meta, items)` for stage
-`M1`; default `ref`.}
+`calibrate`; default `ref`.}
 
 \item{margins}{Optional population margins for raking: a margin data
 frame ([make_margins()]) or a list of margin data frames
@@ -59,28 +62,32 @@ respondents who cannot be raked follow the `weighting` block of the
 instrument.}
 
 \item{models}{Optional named list of pre-fitted item models per outcome
-([fit_scale_model()]); they take precedence over stage `M1`.}
+([fit_scale_model()]); they take precedence over stage `calibrate`.}
 
 \item{donors}{Donor samples for the transfer module: `list(meta, items)`
 with a column `meta$sample` naming the sample.}
 
-\item{stages}{Stages to run (see Details).}
+\item{stages}{Stages to run (see Details); they are run in the order of
+the pipeline. The stage names of normpipe < 0.4 (`P0`, `M1`, `M2`,
+`M3a`, `M3b`, `M3c`, `M3d`, `X1`) are still understood.}
 
 \item{outcomes}{Restrict to these outcomes (`<version>_<scale>`).}
 
-\item{portal_citation}{Citation string written into the portal JSON.}
+\item{citation}{Citation string written into the JSON export.}
 
 \item{verbose}{Print progress messages.}
 
+\item{portal_citation}{Name of `citation` in normpipe < 0.4.}
+
 \item{ctx}{Context of a run (`norming_context()`).}
 
-\item{stage}{One of the stages (see Details).}
+\item{stage}{One stage (see Details), or `intervals`.}
 }
 \value{
-`run_norming()`: with stage `X1`, the long norm table (invisibly);
-  otherwise `NULL` (invisibly). `norming_context()`: an environment of
-  class `normpipe_run`. `run_stage()`: the context (invisibly); for `X1`
-  the long table is in `ctx$long`. All results are written to `out_dir`.
+`run_norming()`: with stage `export`, the long norm table
+  (invisibly); otherwise `NULL` (invisibly). `norming_context()`: an
+  environment of class `normpipe_run`. `run_stage()`: the context
+  (invisibly); after `export` the long table is in `ctx$long`. All results are written to `out_dir`.
 }
 \description{
 `run_norming()` runs the stages of the pipeline for one instrument and
@@ -90,33 +97,44 @@ convenient for long runs and for inspecting intermediate results.
 }
 \details{
 Stages:
-* `P0`: scoring of the reference sample, optional raking to `margins`,
-  imputation of skipped items (`missing` block), route per scale (direct,
-  frequency or transfer). `P0` is cheap and is run by every other stage
-  when it has not been run on the context yet.
-* `M1`: calibration of the item models ([fit_scale_model()]) in the
+* `prepare`: scoring of the reference sample, optional raking to
+  `margins`, imputation of skipped items (`missing` block), route per
+  scale (direct, frequency or transfer). This stage is cheap and is run by
+  every other stage when it has not been run on the context yet.
+* `calibrate`: calibration of the item models ([fit_scale_model()]) in the
   calibration sample (default: the reference sample).
-* `M2`: transfer models for scales whose items the reference sample did
-  not answer (only with `transfer: enabled: true` and `donors`, see
+* `transfer`: transfer models for scales whose items the reference sample
+  did not answer (only with `transfer: enabled: true` and `donors`, see
   [fit_transfer()]).
-* `M3a`: band norms per reporting cell and overall ([norms_all_cells()]).
-* `M3b`: continuous-age kernel norms ([weighted_norms_continuous()]).
-* `M3c`: score-conditional intervals ([conditional_tables()]).
-* `M3d`: integrated intervals ([integrated_intervals()]).
-* `X1`: exports: `norm_tables_long.csv`, `norm_tables_age_continuous.csv`,
-  `platform/norms_<version>.csv` ([export_platform_tables()]),
-  `portal/<instrument>.json` ([export_portal_json()], needs jsonlite) and
-  `x1_reliability.csv`.
+* `norms`: norms per reporting cell and overall, with norm bands
+  ([norms_all_cells()]).
+* `continuous_norms`: kernel norms along the continuous variable of
+  `groups$continuous`, e.g. age ([weighted_norms_continuous()]).
+* `intervals_conditional`: score-conditional intervals
+  ([conditional_tables()]).
+* `intervals_integrated`: integrated intervals ([integrated_intervals()]).
+  `intervals` stands for both interval stages.
+* `export`: the result tables (see below).
+
+Results. The `export` stage writes to `out_dir`, depending on
+`export$formats` of the instrument: `norm_tables.csv` (one row per
+version, scale, reporting cell and raw score) and
+`norm_tables_continuous.csv` (format `long`), `compact/norms_<version>.csv`
+([export_compact()], format `compact`) and `json/<instrument>.json`
+([export_json()], format `json`, needs jsonlite), and `reliability.csv`.
+Other stages write `scale_registry.csv`, `reference_scores.rds`,
+`rake_diagnostics.rds`, `transfer_family_selection.csv` and
+`transfer_crosscheck.csv`.
 
 Scales without an item model (`model: none`, or frequency input without
 `models`) get norms and norm bands but no individual intervals. When
 transfer is disabled, scales that would need it are dropped.
 
 Caching. Intermediate results are stored per scale as `.rds` files with a
-dependency key ([cache_key()]). A stage is skipped for a scale when its
+dependency key ([cache_key()]) in `out_dir/cache`. A stage is skipped for a scale when its
 result exists and neither the configuration it uses, nor the data, nor the
 results it builds on have changed; otherwise the result is recomputed and
-the outdated file is moved to `out_dir/superseded/`. Changing, say, the
+the outdated file is moved to `out_dir/cache/superseded/`. Changing, say, the
 number of bootstrap draws therefore recomputes the frames and norm tables
 but neither the item models nor the transfer fits.
 }
@@ -127,10 +145,11 @@ inst <- read_instrument(system.file("instruments/demo7/demo7.yml",
 sim <- simulate_reference(inst, N = 1500)
 res <- run_norming(inst, ref = list(meta = sim$meta, items = sim$items),
                    out_dir = "demo-out",
-                   stages = c("P0", "M1", "M3a", "M3b", "M3c", "M3d", "X1"))
+                   stages = c("calibrate", "norms", "continuous_norms",
+                              "intervals", "export"))
 # the same, stage by stage
 ctx <- norming_context(inst, ref = sim, out_dir = "demo-out")
-run_stage(ctx, "M3a")
+run_stage(ctx, "norms")
 cache_status("demo-out")
 }
 }

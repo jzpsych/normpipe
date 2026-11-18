@@ -39,52 +39,62 @@ bridge_scores <- function(items_df, inst) {
 
 #' Donor frame of the transfer models
 #'
-#' Meta data (`id`, `age`, `gender`, `sample`), bridge scores and scale scores
-#' (not prorated) of the donor samples. `sample` is a factor whose first level
-#' is `transfer$reference_level`; gender levels follow `inst$cells$gender`.
-#' With `ref_scores`, donors outside the age range of the reference sample are
-#' dropped.
+#' Meta data (`id`, the variables of the norm groups, `sample`), bridge
+#' scores and scale scores (not prorated) of the donor samples. `sample` is a
+#' factor whose first level is `transfer$reference_level`; categorical group
+#' variables are factors whose levels follow the configured groups. With
+#' `ref_scores`, donors outside the range of the reference sample on a
+#' numeric group variable (e.g. age) are dropped.
 #'
 #' @param donors List with `meta` and `items` (one completed data set).
 #' @param inst Instrument.
-#' @param ref_scores Optional scores of the reference sample (for the age range).
+#' @param ref_scores Optional scores of the reference sample (for the range
+#'   of the numeric group variables).
 #' @return Tibble.
 #' @export
 transfer_donor_frame <- function(donors, inst, ref_scores = NULL) {
   dm <- as_tibble(donors$meta)
-  need <- c("age", "gender", "sample")
+  need <- c(group_sources(inst), "sample")
   if (length(setdiff(need, names(dm))))
     stop("Donor meta data need the columns ", paste(need, collapse = ", "), ".")
   lv <- inst$transfer$reference_level %||% levels(factor(dm$sample))[1]
   if (!lv %in% dm$sample) stop("transfer$reference_level '", lv, "' is not a donor sample.")
   dm$sample <- factor(dm$sample, levels = c(lv, setdiff(unique(as.character(dm$sample)), lv)))
-  g_don <- unique(stats::na.omit(as.character(dm$gender)))
-  g_lv <- c(intersect(inst$cells$gender, g_don), sort(setdiff(g_don, inst$cells$gender)))
-  dm$gender <- factor(as.character(dm$gender), levels = g_lv)
+  for (v in categorical_sources(inst)) {
+    conf <- inst$groups$vars[[v]]$levels
+    g_don <- unique(stats::na.omit(as.character(dm[[v]])))
+    dm[[v]] <- factor(as.character(dm[[v]]), levels = c(intersect(conf, g_don), sort(setdiff(g_don, conf))))
+  }
   out <- bind_cols(dm, bridge_scores(donors$items, inst),
                    score_scales(donors$items, inst, prorate = FALSE))
   if (!is.null(ref_scores))
-    out <- out %>% filter(between(.data$age, min(ref_scores$age, na.rm = TRUE),
-                                  max(ref_scores$age, na.rm = TRUE)))
+    for (v in intersect(numeric_sources(inst), names(ref_scores))) {
+      if (all(is.na(ref_scores[[v]]))) next
+      out <- out[!is.na(out[[v]]) & out[[v]] >= min(ref_scores[[v]], na.rm = TRUE) &
+                   out[[v]] <= max(ref_scores[[v]], na.rm = TRUE), , drop = FALSE]
+    }
   out
 }
 
 #' Prediction frame of the reference sample
 #'
 #' @param items Item data of the reference sample (one completed data set).
-#' @param ref_scores Scores of the reference sample (`id`, `age`, `gender`, `weight`).
+#' @param ref_scores Scores of the reference sample (`id`, the group
+#'   variables, `weight`).
 #' @param ref_ids Ids of the rows of `items`.
 #' @param donor_frame Donor frame ([transfer_donor_frame()]) for the factor levels.
 #' @param inst Instrument.
-#' @return Tibble with `id`, `age`, `gender`, `weight`, the bridge scores and
-#'   `sample` (reference level).
+#' @return Tibble with `id`, the group variables, `weight`, the bridge scores
+#'   and `sample` (reference level).
 #' @noRd
 transfer_prediction_frame <- function(items, ref_scores, ref_ids, donor_frame, inst) {
   lv <- levels(donor_frame$sample)
-  bind_cols(ref_scores %>% select("id", "age", "gender", "weight"),
-            bridge_scores(items, inst)[match(ref_scores$id, ref_ids), ]) %>%
-    mutate(gender = factor(as.character(.data$gender), levels = levels(donor_frame$gender)),
-           sample = factor(lv[1], levels = lv))
+  pf <- bind_cols(ref_scores %>% select(all_of(c("id", group_sources(inst), "weight"))),
+                  bridge_scores(items, inst)[match(ref_scores$id, ref_ids), ])
+  for (v in categorical_sources(inst))
+    pf[[v]] <- factor(as.character(pf[[v]]), levels = levels(donor_frame[[v]]))
+  pf$sample <- factor(lv[1], levels = lv)
+  pf
 }
 
 #' Data and model definition of one transfer model

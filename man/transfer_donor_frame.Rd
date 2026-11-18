@@ -11,15 +11,17 @@ transfer_donor_frame(donors, inst, ref_scores = NULL)
 
 \item{inst}{Instrument.}
 
-\item{ref_scores}{Optional scores of the reference sample (for the age range).}
+\item{ref_scores}{Optional scores of the reference sample (for the range
+of the numeric group variables).}
 }
 \value{
 Tibble.
 }
 \description{
-Meta data (`id`, `age`, `gender`, `sample`), bridge scores and scale scores
-(not prorated) of the donor samples. `sample` is a factor whose first level
-is `transfer$reference_level`; gender levels follow `inst$cells$gender`.
-With `ref_scores`, donors outside the age range of the reference sample are
-dropped.
+Meta data (`id`, the variables of the norm groups, `sample`), bridge
+scores and scale scores (not prorated) of the donor samples. `sample` is a
+factor whose first level is `transfer$reference_level`; categorical group
+variables are factors whose levels follow the configured groups. With
+`ref_scores`, donors outside the range of the reference sample on a
+numeric group variable (e.g. age) are dropped.
 }

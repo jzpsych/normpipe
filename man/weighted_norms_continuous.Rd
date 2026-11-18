@@ -2,16 +2,17 @@
 % Please edit documentation in R/norms.R
 \name{weighted_norms_continuous}
 \alias{weighted_norms_continuous}
-\title{Continuous-age kernel norms}
+\title{Norms as a smooth function of a continuous variable (kernel norms)}
 \usage{
 weighted_norms_continuous(
   fr,
   s,
   inst,
-  ages = inst$cells$ages,
+  values = inst$groups$continuous$values,
   probs = inst$uncertainty$probs,
   clamp = inst$uncertainty$pctl_clamp,
-  convention = inst$uncertainty$pctl_convention \%||\% "midpoint"
+  convention = inst$uncertainty$pctl_convention \%||\% "midpoint",
+  ages = NULL
 )
 }
 \arguments{
@@ -22,24 +23,31 @@ projection of the transfer module).}
 
 \item{inst}{Instrument ([read_instrument()]).}
 
-\item{ages}{Integer target ages (default `cells$ages` of the instrument).}
+\item{values}{Target values of the continuous variable (default: the
+configured range in steps of one).}
 
 \item{probs}{Lower and upper quantile of the norm band.}
 
 \item{clamp}{Percentile ranks are clamped to `[clamp, 1 - clamp]` before
-the T transformation.}
+the transformation to the norm scale.}
 
 \item{convention}{`"midpoint"` or `"cumulative"` (see Details).}
+
+\item{ages}{Name of `values` in normpipe < 0.4; still accepted.}
 }
 \value{
-Tibble with `gender`, `age`, `half_width`, `n_eff_local`, `raw`,
-  `pctl_med`, `pctl_lo`, `pctl_hi`, `T`, `T_lo`, `T_hi`.
+Tibble with the `by` variables, the continuous variable,
+  `half_width`, `n_eff_local`, `raw`, `pctl_med`, `pctl_lo`, `pctl_hi`,
+  `T`, `T_lo`, `T_hi`.
 }
 \description{
-Per gender (or pooled when the instrument has no gender cells) and target
-age, respondents are weighted by an Epanechnikov kernel around the target
-age whose half-width widens from half_width0 until the local effective
-sample size reaches min_neff, up to max_half_width. Pseudo-observations of
-the prior carry their own ages (prior_rows), so they enter the kernel like
-everybody else. Kernel settings come from `cells$kernel` of the instrument.
+For every value of the continuous variable of the instrument
+(`groups$continuous`, typically age in years), respondents are weighted
+by an Epanechnikov kernel around that value whose half-width widens from
+`half_width0` until the local effective sample size reaches `min_neff`,
+up to `max_half_width`. This is done separately for every combination of
+the categorical variables in `groups$continuous$by` (default: all
+categorical group variables, e.g. per gender), or pooled when there is
+none. Pseudo-observations of the prior carry their own values of the
+variable, so they enter the kernel like everybody else.
 }

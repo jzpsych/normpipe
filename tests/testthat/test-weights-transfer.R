@@ -82,7 +82,7 @@ test_that("the cross-check table pairs direct and projected norms by cell and sc
   nm <- norms_all_cells(fr, s, inst)
   cc <- crosscheck_table(nm, nm)
   expect_equal(nrow(cc), nrow(nm$cells) + nrow(nm$overall))
-  expect_true(all(cc$dT == 0) && all(cc$inside))
+  expect_true(all(cc$difference == 0) && all(cc$inside))
 })
 
 test_that("the beta-binomial summed-score representation follows the scale", {

@@ -53,13 +53,11 @@ make_Tmap <- function(esc, norm_tab) {
 #' overall table last
 #' @noRd
 split_cells <- function(fr, inst) {
-  fr <- add_age_group(fr, inst)
+  fr <- add_groups(fr, inst)
   cv <- cell_vars(inst)
   out <- list()
   if (length(cv)) {
-    sub <- fr
-    if ("gender" %in% cv) sub <- filter(sub, .data$gender %in% inst$cells$gender)
-    if ("age_group" %in% cv) sub <- filter(sub, !is.na(.data$age_group))
+    sub <- fr[in_groups(fr, inst, cv), , drop = FALSE]
     cells <- distinct(sub, across(all_of(cv))) %>% arrange(across(all_of(cv)))
     for (r in seq_len(nrow(cells))) {
       key <- cell_key(cells[r, , drop = FALSE])
@@ -68,7 +66,7 @@ split_cells <- function(fr, inst) {
       out[[key]] <- sub[sel, ]
     }
   }
-  if (isTRUE(inst$cells$overall) || !length(cv)) out$overall <- fr
+  if (isTRUE(inst$groups$overall) || !length(cv)) out$overall <- fr
   out
 }
 
@@ -83,18 +81,20 @@ norm_table_of_cell <- function(nm, key, inst) {
   nm$cells[keys == key, ]
 }
 
-#' Individual intervals on the T metric
+#' Individual intervals on the norm scale
 #'
 #' `conditional_tables()` gives score-conditional intervals for fixed item
 #' parameters and norm values: per reporting cell the weighted score
 #' distribution is carried onto the latent metric as the population prior,
 #' the summed-score EAP gives the posterior of the trait for every summed
 #' score, and the expected-score curve together with the norm table of the
-#' cell maps it onto T.
+#' cell maps it onto the norm scale (T by default; the columns carry the name
+#' of the norm scale of the instrument).
 #'
 #' `integrated_intervals()` repeats this computation under joint draws of the
 #' item parameters ([draw_model_params()]) and of the norm values (the draws
-#' of the draw frame), and mixes the per-draw posteriors on a common T grid.
+#' of the draw frame), and mixes the per-draw posteriors on a common grid of
+#' standard scores.
 #' The resulting intervals contain both measurement error and the
 #' uncertainty of the norms.
 #'
@@ -122,12 +122,13 @@ norm_table_of_cell <- function(nm, key, inst) {
 conditional_tables <- function(blocks, s, fr, nm, inst, sum_scores = NULL,
                                probs = inst$uncertainty$probs, ...) {
   fr <- point_frame(fr)
+  nm <- norm_internal(nm, inst)
   esc <- expected_score_curve(blocks, s)
   gh <- statmod::gauss.quad.prob(21, "normal")
   prep <- map(blocks, block_prep, grid = esc$theta, gh = gh)
   sum_scores <- sum_scores %||% eap_sum_rows(s)
   cells <- split_cells(fr, inst)
-  imap(cells, \(sub, key) {
+  out <- imap(cells, \(sub, key) {
     ntab <- norm_table_of_cell(nm, key, inst)
     prw <- score_dist_to_theta_prior(sub$score, sub$weight, esc, s$step)
     tab <- eapsum_table(blocks, s, esc$theta, prw, sum_scores = sum_scores,
@@ -136,6 +137,7 @@ conditional_tables <- function(blocks, s, fr, nm, inst, sum_scores = NULL,
     tab %>% mutate(T_eap = Tmap(.data$theta_eap), T_lo = Tmap(.data$theta_lo),
                    T_hi = Tmap(.data$theta_hi))
   })
+  norm_public(out, inst)
 }
 
 #' @rdname conditional_tables
@@ -143,14 +145,16 @@ conditional_tables <- function(blocks, s, fr, nm, inst, sum_scores = NULL,
 #'   one parameter draw of the scale's model(s).
 #' @param model_draws List of parameter draws ([draw_model_params()]); for
 #'   composite scales a list of named lists of component models.
-#' @param T_grid T grid on which the per-draw posteriors are mixed.
-#' @param clamp Percentile clamp of the T transformation.
+#' @param T_grid Grid of standard scores on which the per-draw posteriors
+#'   are mixed; default mean +/- 4 sd of the norm scale in steps of sd / 100
+#'   (10 to 90 in steps of 0.1 for T).
+#' @param clamp Percentile clamp of the transformation to the norm scale.
 #' @param convention Percentile convention (`"midpoint"` or `"cumulative"`),
 #'   see [weighted_norms()].
 #' @export
 integrated_intervals <- function(blocks_fun, model_draws, s, fr, inst,
                                  sum_scores = NULL, probs = inst$uncertainty$probs,
-                                 T_grid = seq(10, 90, by = 0.1),
+                                 T_grid = norm_grid(inst$norm_scale),
                                  clamp = inst$uncertainty$pctl_clamp,
                                  convention = inst$uncertainty$pctl_convention %||% "midpoint", ...) {
   n_param <- length(model_draws)
@@ -169,7 +173,7 @@ integrated_intervals <- function(blocks_fun, model_draws, s, fr, inst,
       sub <- cells[[key]] %>% filter(.data$.draw %in% chunks[[r]])
       pw <- score_dist_to_theta_prior(sub$score, sub$weight, esc, s$step)
       p <- wecdf_at(sub$score, sub$weight, s$grid, convention)
-      Tmap <- make_Tmap(esc, tibble(raw = s$grid, T = pctl_to_T(p, clamp)))
+      Tmap <- make_Tmap(esc, tibble(raw = s$grid, T = pctl_to_norm(p, clamp, inst$norm_scale)))
       ep <- eapsum_table(bl, s, esc$theta, pw, sum_scores = sum_scores,
                          return_posterior = TRUE, prep = prep, ...)
       T_theta <- Tmap(ep$theta)
@@ -179,13 +183,14 @@ integrated_intervals <- function(blocks_fun, model_draws, s, fr, inst,
                  yleft = 0, yright = 1, ties = "ordered")$y
     }
   }
-  map(acc, \(A) map_dfr(seq_along(sum_scores), \(j) {
+  out <- map(acc, \(A) map_dfr(seq_along(sum_scores), \(j) {
     mix <- A[, j] / n_param
     tibble(sum_score = sum_scores[j], raw = sum_to_raw(sum_scores[j], s),
            T_eap = sum(head(T_grid, -1) * diff(mix)) + T_grid[1] * mix[1],
            T_lo = T_grid[which.max(mix >= probs[1])],
            T_hi = T_grid[which.max(mix >= probs[2])])
   }))
+  norm_public(out, inst)
 }
 
 #' @rdname conditional_tables

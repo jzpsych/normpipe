@@ -1,25 +1,12 @@
 # ==============================================================================
-# transfer-stage.R -- stage M2 of run_norming(): donor frame, prediction
+# transfer-stage.R -- stage `transfer` of run_norming(): donor frame, prediction
 # frames, transfer fits (with the choice among candidate families)
 # ==============================================================================
 
-#' Cache of stage M2
-#'
-#' Uses `cache_get()` (fingerprinted cache of normpipe >= 0.3.0) when
-#' available, otherwise a plain file cache: an existing `<name>.rds` in
-#' `out_dir` is reused.
+#' Cache of the transfer stage: results in `out_dir/cache`, keyed
 #' @noRd
-transfer_cache <- function(out_dir, say = message) {
-  if (exists("cache_get", mode = "function", inherits = TRUE))
-    return(function(name, key, compute) cache_get(out_dir, name, key, compute, say = say))
-  function(name, key, compute) {
-    f <- file.path(out_dir, paste0(name, ".rds"))
-    if (file.exists(f)) return(readRDS(f))
-    x <- compute()
-    saveRDS(x, f)
-    x
-  }
-}
+transfer_cache <- function(out_dir, say = message)
+  function(name, key, compute) cache_get(out_dir, name, key, compute, say = say)
 
 #' Fingerprint of a transfer model: everything that changes the fit
 #' @noRd
@@ -33,21 +20,21 @@ transfer_key <- function(td, backend) {
                    backend = backend))
 }
 
-#' Stage M2 of run_norming(): transfer models
+#' Stage `transfer` of run_norming(): transfer models
 #'
 #' Builds the donor frame and the prediction frame(s) of the reference sample,
 #' then fits a transfer model for every scale on the transfer route and for
-#' every cross-check outcome (`<outcome>_lodo`). With several candidate
+#' every cross-check outcome (`<outcome>_crosscheck`). With several candidate
 #' families (`transfer$family: [beta_binomial, gaussian]`), each candidate is
 #' fitted (`transfer_<key>__<family>`) and the best converged one by PSIS-LOO
 #' becomes `transfer_<key>`; the choice is written to
-#' `m2_family_selection.csv`. Dense scales keep the censored candidates
+#' `transfer_family_selection.csv`. Dense scales keep the censored candidates
 #' (the beta-binomial and the cumulative model need a count structure).
 #'
 #' @param inst Instrument.
-#' @param reg Scale registry (stage P0).
+#' @param reg Scale registry (stage `prepare`).
 #' @param ref Reference data (`meta`, `items`).
-#' @param ref_scores Scores of the reference sample (`id`, `age`, `gender`, `weight`).
+#' @param ref_scores Scores of the reference sample (`id`, the variables of the norm groups, `weight`).
 #' @param donors Donor samples: `list(meta, items)`.
 #' @param out_dir Output directory.
 #' @param say Message function.
@@ -71,7 +58,7 @@ run_transfer_stage <- function(inst, reg, ref, ref_scores, donors = inst$donors_
     share <- answered_share(donors$items, inst)
     out <- is.na(share) | share < mc$min_answered
     if (any(out)) {
-      say("M2: ", sum(out), " donor(s) answered less than ", round(100 * mc$min_answered),
+      say("transfer: ", sum(out), " donor(s) answered less than ", round(100 * mc$min_answered),
           " % of the items and are not used")
       donors <- list(meta = donors$meta[!out, , drop = FALSE], items = donors$items[!out, , drop = FALSE])
     }
@@ -80,26 +67,33 @@ run_transfer_stage <- function(inst, reg, ref, ref_scores, donors = inst$donors_
     imp <- impute_items(donors$items, inst, M = n_sets, seed = sum(utf8ToInt(paste0(inst$id, "_donors"))),
                         covariates = if (length(cv)) as.data.frame(donors$meta)[cv], k = mc$neighbours)
     if (sum(attr(imp, "n_imputed")) > 0) {
-      say("M2: ", sum(attr(imp, "n_imputed")), " skipped item response(s) of the donors imputed; ",
+      say("transfer: ", sum(attr(imp, "n_imputed")), " skipped item response(s) of the donors imputed; ",
           "each chain of a transfer model uses one of ", n_sets, " completed data sets")
       donor_frames <- map(imp, \(it) transfer_donor_frame(list(meta = donors$meta, items = it), inst, ref_scores))
     }
   }
   donor_frame <- donor_frames[[1]] %||% transfer_donor_frame(donors, inst, ref_scores)
-  saveRDS(donor_frame, file.path(out_dir, "m2_donor_frame.rds"))
-  n_na <- sum(is.na(ref_scores$age) | is.na(ref_scores$gender) |
-                !as.character(ref_scores$gender) %in% levels(donor_frame$gender))
-  if (n_na) say("M2: ", n_na, " reference respondent(s) without age or with a gender ",
-                "category absent from the donor samples are not projected")
+  dir.create(cache_dir(out_dir), showWarnings = FALSE, recursive = TRUE)
+  saveRDS(donor_frame, cache_file(out_dir, "transfer_donor_frame"))
+  gv <- intersect(group_sources(inst), names(ref_scores))
+  not_proj <- rep(FALSE, nrow(ref_scores))
+  for (v in gv) {
+    not_proj <- not_proj | is.na(ref_scores[[v]])
+    if (v %in% categorical_sources(inst))
+      not_proj <- not_proj | !as.character(ref_scores[[v]]) %in% levels(donor_frame[[v]])
+  }
+  if (any(not_proj)) say("transfer: ", sum(not_proj), " reference respondent(s) with a missing value on ",
+                         paste(gv, collapse = " or "), ", or with a category absent from the donor samples, ",
+                         "are not projected")
 
   backend <- transfer_backend(inst)
-  todo <- c(set_names(need, need), set_names(cross, paste0(cross, "_lodo")))
+  todo <- c(set_names(need, need), set_names(cross, paste0(cross, "_crosscheck")))
   sel_all <- list()
   for (i in seq_along(todo)) {
     o <- todo[[i]]; k <- names(todo)[i]
     s <- get_scale(inst, o)
     sp <- transfer_spec(inst, o)
-    if (endsWith(k, "_lodo") && !length(sp$exclude)) sp$exclude <- own_bridge(inst, o)
+    if (endsWith(k, "_crosscheck") && !length(sp$exclude)) sp$exclude <- own_bridge(inst, o)
     fams <- sp$family
     # count families need the count structure (not for dense scales); if no
     # other candidate is left, bb_scale() reports the problem
@@ -115,7 +109,7 @@ run_transfer_stage <- function(inst, reg, ref, ref_scores, donors = inst$donors_
       rlang::hash(map_chr(tds_imp[[fam]], transfer_key, backend = backend))
     fit_one <- function(fam, name) {
       cache(name, key_of(fam), function() {
-        say("M2 ", k, ": fitting ", fam, excl)
+        say("transfer ", k, ": fitting ", fam, excl)
         if (is.null(tds_imp)) transfer_model(tds[[fam]], backend = backend) else
           transfer_model_multiple(tds_imp[[fam]], backend = backend)
       })
@@ -140,7 +134,7 @@ run_transfer_stage <- function(inst, reg, ref, ref_scores, donors = inst$donors_
                                                sel$treedepth_hits,
                                                ifelse(sel$phi_plateau > 0, sprintf(", %.0f%% of draws at phi > 1e10",
                                                                                    100 * sel$phi_plateau), "")))
-      say("M2 ", k, ": ", best, " chosen by LOO (",
+      say("transfer ", k, ": ", best, " chosen by LOO (",
           paste(sprintf("%s %.1f%s", sel$family, sel$elpd_loo, why), collapse = "; "), ")",
           if (!any(sel$eligible)) " -- no candidate converged, chosen among all; check the fits" else "")
       fits[[best]]
@@ -149,6 +143,6 @@ run_transfer_stage <- function(inst, reg, ref, ref_scores, donors = inst$donors_
   }
   if (length(sel_all))
     readr::write_csv(bind_rows(sel_all) %>% select("outcome", everything()),
-                     file.path(out_dir, "m2_family_selection.csv"))
+                     file.path(out_dir, "transfer_family_selection.csv"))
   invisible(NULL)
 }

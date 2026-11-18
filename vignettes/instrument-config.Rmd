@@ -30,11 +30,14 @@ cat(readLines(system.file("instruments/demo7/demo7.yml", package = "normpipe")),
 | `report_step` | reporting step for scales with a dense set of attainable scores (see `mean_of_means`) [0.01] |
 | `items` | item table (below) |
 | `versions` | list of versions, each with its scales (below) |
-| `cells` | reporting cells and continuous-age settings (below) |
+| `groups` | groups for which norms are tabulated, and norms along a continuous variable (below) |
+| `norm_scale` | metric of the standard scores (below) [`T`] |
+| `export` | formats and language of the exported tables (below) |
 | `uncertainty` | settings of the norm bands and intervals (below) |
 | `measurement` | calibration of the item models (below) |
 | `transfer` | optional transfer module (below) |
 | `weighting` | raking of the reference weights (below) |
+| `missing` | handling of skipped items (below) |
 
 YAML 1.1 reads the bare keys `n`, `y`, `no`, `yes`, `off`, `on` as booleans,
 so the number of items is given as `n_items`, not `n`.
@@ -92,20 +95,77 @@ Models:
   scores of the calibration data.
 - `none`: norms and norm bands only, no individual intervals.
 
-## `cells`
+## `groups`
+
+The norm groups: the variables of the reference sample for whose groups
+norms are tabulated. Without this block, only the overall table is computed.
 
 | Key | Meaning |
 |---|---|
-| `gender` | gender codes that form reporting cells, as in `meta$gender` (omit for no gender cells) |
-| `age_breaks` | breaks of the age bands, closed on the left; `Inf` (or `.inf`) for an open upper band (omit for no age bands) |
-| `ages` | `[from, to]`: range of integer ages for continuous-age norms (omit to skip stage `M3b`) |
+| `by` | mapping of variable names to their groups. A categorical variable lists the codes that form groups, as they appear in `meta`, e.g. `gender: [m, f]`. A numeric variable is cut into bands with `{breaks: [...]}`, closed on the left; `Inf` (or `.inf`) gives an open upper band, e.g. `age: {breaks: [18, 40, 65, Inf]}` |
 | `overall` | also compute the overall table [`true`] |
-| `kernel` | continuous-age kernel: `half_width0` [4], `min_neff` [150], `max_half_width` [12] |
+| `continuous` | norms as a smooth function of one numeric variable (omit to skip stage `continuous_norms`): `variable`, `range: [from, to]` (integer values), `by` (categorical variables of `by` within whose groups the norms are computed [all of them]) and `kernel` |
+| `continuous: kernel` | `half_width0` [4], `min_neff` [150], `max_half_width` [12] |
 
-The reporting cells are all combinations of the configured gender codes and
-age bands. For continuous-age norms an Epanechnikov kernel around every
-target age starts at `half_width0` years and widens by one year until the
-local effective sample size reaches `min_neff`, up to `max_half_width`.
+A reporting cell is one combination of the groups of all variables in `by`;
+the tables have one column per variable (the variable name for a categorical
+variable, `<variable>_group` for a banded one). Respondents with a code that
+is not listed, or with a value outside the bands, enter the overall table
+only. The reference data (`meta`) must contain every variable named here.
+
+```yaml
+groups:
+  by:
+    gender: [m, f]
+    age: {breaks: [18, 40, 65, Inf]}
+  continuous:
+    variable: age
+    range: [18, 80]
+    kernel: {half_width0: 4, min_neff: 150, max_half_width: 12}
+```
+
+Other examples: `by: {education: [low, mid, high]}` for norms by education
+only, or `by: {sample: [clinical, community], age: {breaks: [12, 15, 18]}}`.
+
+For the continuous norms an Epanechnikov kernel around every target value
+starts at `half_width0` (in units of the variable, e.g. years) and widens by
+one unit until the local effective sample size reaches `min_neff`, up to
+`max_half_width`.
+
+Instead of `groups`, the block `cells` with the keys `gender` (codes),
+`age_breaks`, `ages` (range of the continuous norms), `overall` and `kernel`
+is also read; it describes groups by `gender` and `age`.
+
+## `norm_scale`
+
+Percentile ranks are turned into standard scores mean + sd · Φ⁻¹(PR). The
+key is either the name of a preset or a mapping.
+
+| Preset | Mean | SD | Limits | Digits |
+|---|---|---|---|---|
+| `T` (default) | 50 | 10 | | 1 |
+| `z` | 0 | 1 | | 2 |
+| `IQ` | 100 | 15 | | 0 |
+| `stanine` | 5 | 2 | 1 to 9 | 0 |
+| `sten` | 5.5 | 2 | 1 to 10 | 0 |
+
+| Key | Meaning |
+|---|---|
+| `name` | name of the scale; it names the score columns of every table (`<name>`, `<name>_lo`, `<name>_hi`, `<name>_cond_lo`, ...). Letters and digits, starting with a letter |
+| `mean`, `sd` | mean and standard deviation of the scale |
+| `limits` | `[low, high]`: standard scores are clipped to this range [none] |
+| `digits` | decimals in the compact and JSON exports; the long table is not rounded [1] |
+
+For example `norm_scale: IQ`, or `norm_scale: {name: SW, mean: 100, sd: 10}`.
+The functions of the package name the columns `T`, `T_lo`, ... in their
+documentation; with another scale, read the name of that scale instead.
+
+## `export`
+
+| Key | Meaning |
+|---|---|
+| `formats` | what stage `export` writes: `long` (`norm_tables.csv`, `norm_tables_continuous.csv`), `compact` (`compact/norms_<version>.csv` and `.rds`), `json` (`json/<instrument>.json`) [all three] |
+| `language` | language of the keys and labels of the JSON file: `en` or `de` [`en`] |
 
 ## `uncertainty`
 
@@ -115,7 +175,7 @@ local effective sample size reaches `min_neff`, up to `max_half_width`.
 | `n_boot` | number of Bayesian-bootstrap draws for the norm bands [200] |
 | `n_param_draws` | number of item-parameter draws for the integrated intervals [50] |
 | `probs` | lower and upper quantile of bands and intervals [`[0.025, 0.975]`] |
-| `pctl_clamp` | percentile ranks are clamped to `[pctl_clamp, 1 - pctl_clamp]` before the T transformation [1e-4] |
+| `pctl_clamp` | percentile ranks are clamped to `[pctl_clamp, 1 - pctl_clamp]` before the transformation to the norm scale [1e-4] |
 | `pctl_convention` | `midpoint` or `cumulative` [`midpoint`] |
 
 Percentile conventions:
@@ -126,7 +186,7 @@ Percentile conventions:
 - `cumulative`: PR = P(X ≤ x), the relative cumulative frequency. Use it to
   reproduce tables that were built with this convention.
 
-T = 50 + 10 Φ⁻¹(PR) in both cases.
+The standard score is mean + sd · Φ⁻¹(PR) in both cases (T = 50 + 10 Φ⁻¹(PR)).
 
 ## `measurement`
 
@@ -146,8 +206,8 @@ maximum likelihood) needs no further package but is slow for long scales.
 
 Used when `run_norming()` receives population `margins`. A margin is a data
 frame with one or more raking variables and a column `Freq` (population
-counts); a list of such data frames is raked jointly, e.g. age band ×
-gender from `make_margins()` plus a separate education margin
+counts); a list of such data frames is raked jointly, e.g. the reporting
+cells (age band × gender) from `make_margins()` plus a separate education margin
 (`data.frame(education = ..., Freq = ...)`, with `education` a column of
 `ref$meta`).
 
@@ -155,9 +215,9 @@ gender from `make_margins()` plus a separate education margin
 |---|---|
 | `trim_quantile` | raked weights are capped at this quantile; 1 switches trimming off [0.99] |
 | `rerake` | rake again after trimming, and trim again, until the margins hold and no weight exceeds the cap [true] |
-| `incomplete` | respondents with a missing raking variable (or a gender outside the cells): `drop`, or `keep` them with their design weight rescaled to the raked total, so that they enter the overall norms [`drop`] |
+| `incomplete` | respondents with a missing raking variable (or a code that is not a configured group): `drop`, or `keep` them with their design weight rescaled to the raked total, so that they enter the overall norms [`drop`] |
 
-`rerake: false` reproduces the one-shot trimming of normpipe 0.1.0.
+With `rerake: false` the weights are trimmed once and not raked again.
 
 ## `missing`
 
@@ -192,23 +252,23 @@ given, with skipped items missing in the likelihood.
 
 ## `transfer`
 
-The transfer module (stage `M2`) is needed only when the reference sample
+The transfer module (stage `transfer`) is needed only when the reference sample
 did not answer all items of some scales.
 
 | Key | Meaning |
 |---|---|
 | `enabled` | switch the module on [`false`] |
 | `bridge` | list of bridge blocks `{id, items}`: item sets of any length answered by the reference sample and the donor samples; each enters as its mean item value (`br_<id>`, missing items ignored), `br_mean` is the mean over all bridge items; ids must be unique |
-| `formula` | right-hand side of the mean model; `{bridge}` stands for the bridge predictors [`"{bridge} + s(age) + gender + sample"`]; e.g. `"{bridge} + s(age, by = gender) + gender + sample"` for gender-specific age trajectories; `sample` or `gender` with a single level in the donor data is dropped (also from `by =`) |
-| `sigma` | right-hand side of the sigma model [`"br_mean + s(age)"`] |
-| `family` | likelihood of the transfer model [`gaussian`], or a list of candidates (e.g. `[beta_binomial, gaussian]`) among which the stage chooses per outcome by PSIS-LOO among the converged fits (`m2_family_selection.csv`): `gaussian` or `skew_normal` are latent distributions of an interval-censored likelihood on the attainable scores; `beta_binomial` models the summed score as a count out of the attainable range, with a logit mean model and a precision model `phi`; `cumulative` treats the same summed score as an ordinal outcome with one threshold per attainable value (any shape of the distribution, also underdispersion relative to the binomial), with a logit location model and a scale model `disc`; the two count families need a count structure, so dense scales (e.g. means of facet means) keep a censored family |
+| `formula` | right-hand side of the mean model; `{bridge}` stands for the bridge predictors [the bridge predictors, a smooth of every numeric variable of the norm groups, every categorical one and `sample`; for groups by gender and age `"{bridge} + s(age) + gender + sample"`]; e.g. `"{bridge} + s(age, by = gender) + gender + sample"` for gender-specific age trajectories; `sample` or a categorical variable with a single level in the donor data is dropped (also from `by =`) |
+| `sigma` | right-hand side of the sigma model [`br_mean` and a smooth of every numeric variable of the norm groups, e.g. `"br_mean + s(age)"`] |
+| `family` | likelihood of the transfer model [`gaussian`], or a list of candidates (e.g. `[beta_binomial, gaussian]`) among which the stage chooses per outcome by PSIS-LOO among the converged fits (`transfer_family_selection.csv`): `gaussian` or `skew_normal` are latent distributions of an interval-censored likelihood on the attainable scores; `beta_binomial` models the summed score as a count out of the attainable range, with a logit mean model and a precision model `phi`; `cumulative` treats the same summed score as an ordinal outcome with one threshold per attainable value (any shape of the distribution, also underdispersion relative to the binomial), with a logit location model and a scale model `disc`; the two count families need a count structure, so dense scales (means of component means of unequal length) keep a censored family |
 | `phi` | right-hand side of the precision model of the beta-binomial [same as `sigma`] |
 | `disc` | right-hand side of the model of log(disc) of the cumulative family, whose intercept is fixed at 0 (disc = 1 at the means of the predictors) [same as `phi`] |
 | `reference_level` | donor sample used as the reference level of `sample` in the fit [first level of `meta$sample`] |
 | `projection_level` | level of `sample` at which the reference sample is projected: a donor sample, or `average` (mean of the sample effects) [`reference_level`] |
 | `bootstrap_weights` | Bayesian bootstrap of the reference weights in every posterior draw, so that the norm band also reflects the sampling error of the reference sample [true] |
 | `exclude` | per outcome, bridge ids left out of the predictors, e.g. `{full_x: [a2]}` |
-| `crosscheck` | directly observed outcomes that are additionally projected without their own bridge items (leave-own-domain-out); results in `c1_crosscheck.csv` |
+| `crosscheck` | directly observed outcomes that are additionally projected without their own bridge items; the comparison with the direct norms is written to `transfer_crosscheck.csv` |
 | `outcomes` | per-outcome overrides (a key given here replaces the global one as a whole; unknown keys are an error) of `formula`, `sigma`, `phi`, `disc`, `family`, `exclude`, `adapt_delta`, `max_treedepth`, `chains`, `iter`, `prior_b`, `prior_b_phi`, `prior_b_disc`, `priors`, `init`, `select_rhat` |
 | `n_draws` | posterior predictive draws per reference respondent [500] |
 | `adapt_delta`, `max_treedepth` | sampler settings passed to brms [0.95, 10] |
@@ -222,23 +282,24 @@ did not answer all items of some scales.
 | `init` | initial values: `random` (brms default) or `0`; left out, the family default is used [beta-binomial: 0; cumulative: random; censored families: intercepts at the location and log scale of the outcome, all else 0] |
 | `backend` | `cmdstanr` or `rstan` [cmdstanr when CmdStan is installed, otherwise rstan] |
 
-The donor samples are attached to the instrument object before calling
-`run_norming()`:
+The donor samples are passed to `run_norming()`:
 
 ```r
 run_norming(inst, ref = ref, donors = list(meta = donor_meta, items = donor_items), out_dir = "out")
 ```
 
-`donor_meta` needs `id`, `age`, `gender` and `sample`. The steps of the stage
+`donor_meta` needs `id`, the variables of the norm groups (e.g. `age` and
+`gender`) and `sample`. The steps of the stage
 can also be called one by one: `transfer_donor_frame()` builds the donor
 frame, `transfer_data()` defines one model (response, censoring or trials,
 formula, priors, initial values; no Stan needed), `transfer_model()` fits it
 with brms, `select_transfer_family()` compares candidate fits by PSIS-LOO,
 and `project_outcome()` projects the reference sample. For every scale that
 needs the transfer, a Bayesian distributional regression predicts the scale
-score, by default from the bridge scores, `s(age)`, `gender` and `sample`,
-with an interval-censored normal likelihood and `sigma` depending on the mean
-bridge score and `s(age)`.
+score, by default from the bridge scores, the variables of the norm groups
+(e.g. `s(age)` and `gender`) and `sample`, with an interval-censored normal
+likelihood and `sigma` depending on the mean bridge score and the numeric
+group variables.
 
 Bridge items that belong to the outcome are observed in the reference sample
 and are never predicted, whatever the family: the model describes only the
@@ -249,19 +310,17 @@ respondent's observed part to every posterior predictive draw of the rest.
 The rest carries the parameter and residual uncertainty, the observed part is
 data. An observed item the respondent skipped is drawn anew in every draw from
 its distribution in the donor samples given the answered item of the same
-bridge block; with `missing: {reference: impute}` it is taken from the
+bridge block; with `missing: {method: impute}` it is taken from the
 completed data sets instead, like every other skipped item. That observed
 items are never predicted is fixed; it has no switch.
 
 The posterior predictive draws for the reference
 sample, evaluated at the projection level of `sample` and combined with
 Bayesian-bootstrap weights, form the draw frame of the scale. Reference
-respondents without age, or with a gender category that does not occur in
-the donor samples, cannot be projected and are left out of the transfer
+respondents with a missing value on a variable of the norm groups, or with
+a category that does not occur in the donor samples, cannot be projected and are left out of the transfer
 scales. With cmdstanr, CmdStan must be installed
 (`cmdstanr::install_cmdstan()`).
-
-To reproduce norms built with normpipe 0.1.0, set `bootstrap_weights: false`.
 
 A small example is `inst/instruments/demo7/demo7_transfer.yml`; a large one
 with 17 two-item bridge blocks is `inst/instruments/pid5/pid5.yml`.

@@ -5,13 +5,16 @@ questionnaires.
 
 normpipe turns a weighted reference sample (or published frequency tables)
 into norm tables for any questionnaire that is described by a YAML
-configuration file. It reports two kinds of uncertainty:
+configuration file. The configuration names the items and scales, the
+groups for which norms are tabulated (for example gender by age band, or
+education) and the norm scale (T by default; z, IQ, stanine, sten or any
+mean and standard deviation). The package reports two kinds of uncertainty:
 
-- **uncertainty of the norm values**: every percentile rank and T value comes
-  with a credible band from a Bayesian bootstrap under a Dirichlet prior over
-  the attainable scores;
+- **uncertainty of the norm values**: every percentile rank and standard
+  score comes with a credible band from a Bayesian bootstrap under a
+  Dirichlet prior over the attainable scores;
 - **measurement error of the individual score**: score-conditional and
-  integrated intervals on the T metric from calibrated item response models
+  integrated intervals on the norm scale from calibrated item response models
   (graded response, bifactor and composite models). The integrated interval
   also contains the uncertainty of the norm values.
 
@@ -27,7 +30,7 @@ Optional packages:
 | Package | Needed for |
 |---|---|
 | `mirt` | fast calibration of the item models (otherwise a built-in, slower estimator is used) |
-| `brms` with `cmdstanr` or `rstan` | the transfer module (stage `M2`); cmdstanr is used when installed and needs CmdStan (`cmdstanr::install_cmdstan()`) |
+| `brms` with `cmdstanr` or `rstan` | the transfer module (stage `transfer`); cmdstanr is used when installed and needs CmdStan (`cmdstanr::install_cmdstan()`) |
 | `jsonlite` | the JSON export |
 
 ## Quick start
@@ -39,12 +42,14 @@ scale_registry(inst)                       # every <version>_<scale> outcome
 sim <- simulate_reference(inst, N = 1500)  # or your own list(meta, items)
 res <- run_norming(inst, ref = list(meta = sim$meta, items = sim$items),
                    out_dir = "demo-out",
-                   stages = c("P0", "M1", "M3a", "M3b", "M3c", "M3d", "X1"))
+                   stages = c("calibrate", "norms", "continuous_norms",
+                              "intervals", "export"))
 ```
 
-`ref$meta` needs `id`, `age`, `gender` and optionally `weight`; `ref$items`
-holds the item columns named `<prefix><item>`. Results and per-scale caches
-are written to `out_dir`. Every cached result knows what it was computed
+`ref$meta` needs `id`, the variables of the norm groups (here `age` and
+`gender`) and optionally `weight`; `ref$items` holds the item columns named
+`<prefix><item>`. The result tables are written to `out_dir`, per-scale
+caches to `out_dir/cache`. Every cached result knows what it was computed
 from: a rerun skips what is unchanged and recomputes what depends on a
 changed setting or data set (`cache_status()`). Single stages can be run
 with `norming_context()` and `run_stage()`.
@@ -54,7 +59,7 @@ Norms from frequency tables instead of raw data:
 ```r
 freq <- list(full_b = data.frame(gender = "f", age_group = "[18,40)",
                                  score = 0:24, count = c(...)))
-run_norming(inst, freq = freq, out_dir = "out", stages = c("P0", "M3a", "X1"))
+run_norming(inst, freq = freq, out_dir = "out", stages = c("norms", "export"))
 ```
 
 The getting-started vignette (`vignette("normpipe")`) walks through the
@@ -65,14 +70,17 @@ the configuration file.
 
 | Stage | Content |
 |---|---|
-| `P0` | scoring of the reference sample, optional raking to population margins, route per scale (direct, frequency or transfer) |
-| `M1` | calibration of the item models in the reference (or a separate calibration) sample: GRM per scale, bifactor per domain, composite route for totals |
-| `M2` | optional transfer module: Bayesian distributional regression (brms) from bridge items to scales the reference sample did not answer, projection into the reference sample |
-| `M3a` | band norms (percentile ranks and T) per reporting cell and overall, with norm bands |
-| `M3b` | continuous-age norms (Epanechnikov kernel with adaptive half-width) |
-| `M3c` | score-conditional intervals (summed-score EAP, Lord–Wingersky recursion, population prior of the cell) |
-| `M3d` | integrated intervals (item-parameter draws × norm-value draws) |
-| `X1` | exports: long norm table, continuous-age table, compact per-version tables, JSON norm file, marginal reliabilities |
+| `prepare` | scoring of the reference sample, optional raking to population margins, route per scale (direct, frequency or transfer) |
+| `calibrate` | calibration of the item models in the reference (or a separate calibration) sample: graded response model per scale, bifactor model for scales made of components, composite route for totals |
+| `transfer` | optional transfer module: Bayesian distributional regression (brms) from bridge items to scales the reference sample did not answer, projection into the reference sample |
+| `norms` | percentile ranks and standard scores per reporting cell and overall, with norm bands |
+| `continuous_norms` | norms as a smooth function of a continuous variable such as age (Epanechnikov kernel with adaptive half-width) |
+| `intervals_conditional` | score-conditional intervals (summed-score EAP, Lord–Wingersky recursion, population prior of the cell) |
+| `intervals_integrated` | integrated intervals (item-parameter draws × norm-value draws) |
+| `export` | long norm table, continuous table, compact per-version tables, JSON norm file, marginal reliabilities |
+
+`intervals` stands for both interval stages. Every stage runs `prepare`
+first when it has not been run yet.
 
 ## Design
 
@@ -81,6 +89,11 @@ the configuration file.
   of items come from the configuration. Attainable scores follow from the
   value sets by convolution; scales can be sums, means or means of component
   means.
+- **Any norm groups and norm scale.** The `groups` block names the
+  variables of the reference sample whose groups are tabulated: categorical
+  variables with their codes, numeric variables cut into bands, in any
+  combination, or none (overall norms only). `norm_scale` sets the metric of
+  the standard scores, which also names the score columns of every table.
 - **Direct route with a Dirichlet prior.** Every reporting cell receives
   `prior_mass` pseudo-observations spread uniformly over the attainable
   scores; Bayesian-bootstrap draws then give the norm bands.
@@ -96,7 +109,8 @@ the configuration file.
 - **Percentile convention.** By default the percentile rank is the midpoint
   rank PR = P(X < x) + ½ P(X = x), whose mean over the norm sample is exactly
   50. `uncertainty: pctl_convention: cumulative` switches to the relative
-  cumulative frequency PR = P(X ≤ x). T = 50 + 10 Φ⁻¹(PR).
+  cumulative frequency PR = P(X ≤ x). The standard score is
+  mean + sd · Φ⁻¹(PR), on the T scale 50 + 10 Φ⁻¹(PR).
 - **Optional transfer module** for scales whose items the reference sample did
   not answer: a bridge of items answered by the reference sample and by donor
   samples predicts the missing scales.
@@ -105,12 +119,17 @@ the configuration file.
 
 | File | Content |
 |---|---|
-| `norm_tables_long.csv` | one row per version, scale, reporting cell and raw score: percentile rank with band, T with band, score-conditional and integrated interval, extrapolation flag, effective N |
-| `norm_tables_age_continuous.csv` | continuous-age norms per gender and year of age |
-| `platform/norms_<version>.csv` | compact per-version tables (raw score, T, integrated interval, percentile rank, extrapolation flag) |
-| `portal/<instrument>.json` | JSON norm file per instrument (German keys) |
-| `x1_reliability.csv` | marginal reliability of every scale with an item model |
-| `p0_scale_registry.csv` | scales with their route |
+| `norm_tables.csv` | one row per version, scale, reporting cell and raw score: percentile rank with band, standard score with band, score-conditional and integrated interval, extrapolation flag, effective N |
+| `norm_tables_continuous.csv` | norms along the continuous variable, e.g. per gender and year of age |
+| `compact/norms_<version>.csv` | compact per-version tables (raw score, standard score, integrated interval, percentile rank, extrapolation flag) |
+| `json/<instrument>.json` | JSON norm file per instrument (English or German keys, `export$language`) |
+| `reliability.csv` | marginal reliability of every scale with an item model |
+| `scale_registry.csv` | scales with their route |
+| `cache/` | cached intermediate results per scale and their manifest |
+
+`export$formats` selects the formats. `migrate_output()` moves an output
+folder written by normpipe < 0.4 to this layout without recomputing
+anything.
 
 Example output of the demo instrument is in `inst/examples/`.
 
@@ -128,7 +147,7 @@ Example output of the demo instrument is in `inst/examples/`.
 
 `tests/testthat` holds the unit tests (Lord–Wingersky recursion against brute
 force, frequency versus individual input, prior mass per cell, grids, EAP
-monotonicity, percentile conventions). `scripts/smoke.R` runs the whole
+monotonicity, percentile conventions, norm groups and norm scales). `scripts/smoke.R` runs the whole
 pipeline on simulated data for the demo instrument; `scripts/smoke_transfer.R`
 runs the transfer module on simulated data and compares the projected norms
 with the norms of the known full responses.

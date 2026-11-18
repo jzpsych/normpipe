@@ -79,22 +79,22 @@ test_that("run_norming() applies one inclusion rule and norms from completed dat
   sim$items[5, 1:5] <- NA; sim$items[6, ] <- NA             # below half of the items
   inst$missing <- list(method = "impute", n_imputations = 4)
   out <- file.path(tempdir(), "np_impute"); unlink(out, recursive = TRUE)
-  expect_message(run_norming(inst, sim, out, stages = c("P0", "M3a"), outcomes = "full_b"),
+  expect_message(run_norming(inst, sim, out, stages = c("prepare", "norms"), outcomes = "full_b"),
                  "2 respondent\\(s\\) answered less than 50 %")
-  p0 <- readRDS(file.path(out, "p0_reference.rds"))
+  p0 <- readRDS(file.path(out, "cache", "prepare_reference.rds"))
   expect_length(p0$imputed, 4); expect_equal(nrow(p0$scores), 298)
-  fr <- frame_long(readRDS(file.path(out, "frame_full_b.rds")))
+  fr <- frame_long(readRDS(file.path(out, "cache", "frame_full_b.rds")))
   expect_false(anyNA(fr$score))
   expect_false(any(as.character(sim$meta$id[5:6]) %in% fr$id))
   expect_equal(sum(fr$.draw == 1 & fr$id %in% as.character(sim$meta$id)), 298)
   # the default keeps prorating with min_answered of each scale: here complete cases
   inst$missing <- list()
   out2 <- file.path(tempdir(), "np_prorate"); unlink(out2, recursive = TRUE)
-  run_norming(inst, sim, out2, stages = c("P0", "M3a"), outcomes = "full_b", verbose = FALSE)
-  fr2 <- frame_long(readRDS(file.path(out2, "frame_full_b.rds")))
+  run_norming(inst, sim, out2, stages = c("prepare", "norms"), outcomes = "full_b", verbose = FALSE)
+  fr2 <- frame_long(readRDS(file.path(out2, "cache", "frame_full_b.rds")))
   expect_lt(sum(fr2$.draw == 1 & fr2$id %in% as.character(sim$meta$id)), 298)
   inst$missing <- list(method = "listwise")
-  expect_error(run_norming(inst, sim, file.path(tempdir(), "np_bad"), stages = "P0", verbose = FALSE), "prorate")
+  expect_error(run_norming(inst, sim, file.path(tempdir(), "np_bad"), stages = "prepare", verbose = FALSE), "prorate")
 })
 
 test_that("item models use the responses of respondents with skipped items", {
@@ -103,7 +103,7 @@ test_that("item models use the responses of respondents with skipped items", {
   it <- sim$items; it$it1[1:80] <- NA
   out <- file.path(tempdir(), "np_fiml"); unlink(out, recursive = TRUE)
   inst$measurement$engine <- "internal"
-  expect_message(run_norming(inst, list(meta = sim$meta, items = it), out, stages = c("P0", "M1"), outcomes = "full_a"),
+  expect_message(run_norming(inst, list(meta = sim$meta, items = it), out, stages = c("prepare", "calibrate"), outcomes = "full_a"),
                  "400 respondents \\(80 with skipped items\\)")
-  expect_s3_class(readRDS(file.path(out, "m1_model_full_a.rds")), "normpipe_model")
+  expect_s3_class(readRDS(file.path(out, "cache", "calibrate_model_full_a.rds")), "normpipe_model")
 })

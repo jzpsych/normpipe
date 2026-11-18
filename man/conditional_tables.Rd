@@ -4,7 +4,7 @@
 \alias{conditional_tables}
 \alias{integrated_intervals}
 \alias{marginal_reliability}
-\title{Individual intervals on the T metric}
+\title{Individual intervals on the norm scale}
 \usage{
 conditional_tables(
   blocks,
@@ -25,7 +25,7 @@ integrated_intervals(
   inst,
   sum_scores = NULL,
   probs = inst$uncertainty$probs,
-  T_grid = seq(10, 90, by = 0.1),
+  T_grid = norm_grid(inst$norm_scale),
   clamp = inst$uncertainty$pctl_clamp,
   convention = inst$uncertainty$pctl_convention \%||\% "midpoint",
   ...
@@ -60,9 +60,11 @@ one parameter draw of the scale's model(s).}
 \item{model_draws}{List of parameter draws ([draw_model_params()]); for
 composite scales a list of named lists of component models.}
 
-\item{T_grid}{T grid on which the per-draw posteriors are mixed.}
+\item{T_grid}{Grid of standard scores on which the per-draw posteriors
+are mixed; default mean +/- 4 sd of the norm scale in steps of sd / 100
+(10 to 90 in steps of 0.1 for T).}
 
-\item{clamp}{Percentile clamp of the T transformation.}
+\item{clamp}{Percentile clamp of the transformation to the norm scale.}
 
 \item{convention}{Percentile convention (`"midpoint"` or `"cumulative"`),
 see [weighted_norms()].}
@@ -82,12 +84,14 @@ parameters and norm values: per reporting cell the weighted score
 distribution is carried onto the latent metric as the population prior,
 the summed-score EAP gives the posterior of the trait for every summed
 score, and the expected-score curve together with the norm table of the
-cell maps it onto T.
+cell maps it onto the norm scale (T by default; the columns carry the name
+of the norm scale of the instrument).
 }
 \details{
 `integrated_intervals()` repeats this computation under joint draws of the
 item parameters ([draw_model_params()]) and of the norm values (the draws
-of the draw frame), and mixes the per-draw posteriors on a common T grid.
+of the draw frame), and mixes the per-draw posteriors on a common grid of
+standard scores.
 The resulting intervals contain both measurement error and the
 uncertainty of the norms.
 

@@ -1,5 +1,5 @@
 # ==============================================================================
-# transfer-spec.R -- configuration of the transfer module (stage M2)
+# transfer-spec.R -- configuration of the transfer module (stage `transfer`)
 #
 # The transfer module is needed only for scales whose items the reference
 # sample did not answer. Files:
@@ -10,17 +10,21 @@
 #                        count structure
 #   transfer-fit.R       transfer_model(), fit_transfer(), select_transfer_family()
 #   transfer-project.R   projection of the reference sample, cross-check
-#   transfer-stage.R     run_transfer_stage(): stage M2 of run_norming()
+#   transfer-stage.R     run_transfer_stage(): stage `transfer` of run_norming()
 #
 # Configuration (instrument$transfer):
 #   enabled: true
 #   bridge:                 # bridge blocks: item sets answered by the reference
 #     - {id: a2, items: [1, 2]}   # sample and the donor samples; any length
 #     ...
-#   formula: "{bridge} + s(age) + gender + sample"   # mean model (right-hand side)
-#   sigma: "br_mean + s(age)"                        # sigma model (censored families)
-#   phi: "br_mean + s(age)"                          # precision model (beta_binomial)
-#   disc: "br_mean + s(age)"                         # scale model (cumulative) [phi]
+#   formula: "{bridge} + s(age) + gender + sample"   # mean model (right-hand side);
+#                                # default: the bridge, a smooth of every numeric
+#                                # and the main effect of every categorical group
+#                                # variable of the instrument, and the sample
+#   sigma: "br_mean + s(age)"    # sigma model (censored families); default:
+#                                # br_mean and a smooth of every numeric variable
+#   phi: ...                     # precision model (beta_binomial) [sigma]
+#   disc: ...                    # scale model (cumulative) [phi]
 #   family: gaussian | skew_normal | beta_binomial | cumulative | [candidates]
 #   select_rhat: 1.01            # largest R-hat of a candidate that may be chosen
 #   select_rhat_chain: 1.05      # the same within single chains (imputed donors)
@@ -31,7 +35,8 @@
 #   bootstrap_weights: true      # Bayesian bootstrap of the reference weights
 #   exclude: {<outcome>: [bridge ids]}   # bridge blocks left out per outcome
 #   crosscheck: [<outcome>, ...]         # directly observed outcomes that are
-#                                        # also projected (leave-own-domain-out)
+#                                        # also projected without their own
+#                                        # bridge items
 #   outcomes: {<outcome>: {formula, family, adapt_delta, ...}}  # overrides
 #   n_draws: 500                 # posterior predictive draws per respondent
 #   adapt_delta: 0.95, max_treedepth: 10, chains: 4, iter: 2000
@@ -49,9 +54,13 @@ count_families <- c("beta_binomial", "cumulative")
 
 #' Keys of a transfer specification (global or per outcome)
 #' @noRd
-transfer_spec_defaults <- function() {
-  list(formula = "{bridge} + s(age) + gender + sample",
-       sigma = "br_mean + s(age)", phi = NULL, disc = NULL,
+transfer_spec_defaults <- function(inst = NULL) {
+  # covariates of the default models: the variables of the norm groups
+  num <- if (is.null(inst)) character(0) else numeric_sources(inst)
+  cat_v <- if (is.null(inst)) character(0) else categorical_sources(inst)
+  smooths <- if (length(num)) sprintf("s(%s)", num)
+  list(formula = paste(c("{bridge}", smooths, cat_v, "sample"), collapse = " + "),
+       sigma = paste(c("br_mean", smooths), collapse = " + "), phi = NULL, disc = NULL,
        family = "gaussian", select_rhat = 1.01, select_rhat_chain = 1.05,
        adapt_delta = 0.95, max_treedepth = 10, chains = 4, iter = 2000,
        prior_b = NULL, prior_b_phi = "normal(0, 2.5)", prior_b_disc = "normal(0, 1)",
@@ -64,7 +73,14 @@ transfer_spec_defaults <- function() {
 #' outcome's entry under `transfer$outcomes` (a key given there replaces the
 #' global one as a whole). For an outcome listed under `transfer$crosscheck`,
 #' the bridge blocks that share items with the outcome are excluded
-#' (leave-own-domain-out), unless `exclude` names them explicitly.
+#' (the scale is projected without its own bridge items), unless `exclude`
+#' names them explicitly.
+#'
+#' The default mean model is the bridge predictors, a smooth of every numeric
+#' group variable, the main effect of every categorical group variable and
+#' the donor sample (with groups by gender and age:
+#' `{bridge} + s(age) + gender + sample`); the default sigma model is
+#' `br_mean` plus the same smooths.
 #'
 #' Defaults that depend on the family (the prior of the mean coefficients)
 #' are resolved per fit by [transfer_data()], because `family` may list
@@ -81,7 +97,7 @@ transfer_spec_defaults <- function() {
 #' @export
 transfer_spec <- function(inst, outcome) {
   tr <- inst$transfer %||% list()
-  def <- transfer_spec_defaults()
+  def <- transfer_spec_defaults(inst)
   ov <- tr$outcomes[[outcome]] %||% list()
   bad <- setdiff(names(ov), c(names(def), "exclude"))
   if (length(bad))
@@ -139,14 +155,17 @@ own_bridge <- function(inst, outcome) {
 #' Right-hand side of a model with the bridge placeholder filled in
 #'
 #' Terms of a factor with a single level in `dat` (e.g. `sample` with one
-#' donor sample, `gender` in a single-gender study) are dropped, and
-#' `by = <factor>` in a smooth is removed for such a factor.
+#' donor sample, or a categorical covariate with one category in the donor
+#' data) are dropped, and `by = <factor>` in a smooth is removed for such a
+#' factor.
 #' @noRd
 expand_rhs <- function(rhs, preds, dat = NULL) {
   rhs <- gsub("{bridge}", paste(preds, collapse = " + "), rhs, fixed = TRUE)
   if (!is.null(dat)) {
-    for (v in c("sample", "gender")) {
-      if (!v %in% names(dat) || length(unique(stats::na.omit(as.character(dat[[v]])))) > 1) next
+    used <- tryCatch(all.vars(stats::as.formula(paste("~", rhs))), error = \(e) character(0))
+    fac <- Filter(\(v) is.factor(dat[[v]]) || is.character(dat[[v]]), intersect(used, names(dat)))
+    for (v in union(intersect("sample", names(dat)), fac)) {
+      if (length(unique(stats::na.omit(as.character(dat[[v]])))) > 1) next
       rhs <- gsub(paste0("(^|\\+)\\s*", v, "\\s*(?=\\+|$)"), "\\1", rhs, perl = TRUE)
       rhs <- gsub(paste0(",\\s*by\\s*=\\s*", v, "\\s*\\)"), ")", rhs)
     }

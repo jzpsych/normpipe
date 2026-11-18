@@ -10,14 +10,16 @@ project_outcome(
   s,
   n_draws = 500,
   level = NULL,
-  bootstrap_weights = FALSE
+  bootstrap_weights = FALSE,
+  vars = NULL
 )
 }
 \arguments{
 \item{fit}{Transfer model ([transfer_model()]).}
 
-\item{pred_frame}{Prediction frame of the reference sample: `id`, `age`,
-`gender`, `weight`, the bridge columns and `sample`; or a list of such
+\item{pred_frame}{Prediction frame of the reference sample: `id`, the
+covariates of the model (e.g. `age`, `gender`), `weight`, the bridge
+columns and `sample`; or a list of such
 frames, one per completed data set of the reference sample
 ([impute_items()]), over which the posterior draws are spread evenly.}
 
@@ -33,6 +35,10 @@ donor samples). Default: the level already set in `pred_frame`.}
 every posterior draw by `weight x Exp(1)` (Bayesian bootstrap), so that
 the norm band contains the sampling uncertainty of the reference sample
 as well as the uncertainty of the transfer model.}
+
+\item{vars}{Columns of `pred_frame` that the draw frame carries (the
+variables of the norm groups); default: every column that is neither a
+bridge score, `id`, `weight` nor `sample`.}
 }
 \value{
 Draw frame (see [direct_frame()]).

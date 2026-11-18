@@ -63,7 +63,7 @@ test_that("a frequency table gives the same point norms as the individual data",
   s <- get_scale(inst, "full_b")
   ref <- dplyr::mutate(sim$meta, score = sc$full_b)
   fr1 <- direct_frame(ref, s, inst, n_boot = 0, prior_mass = 0)
-  freq <- add_age_group(ref, inst) |>
+  freq <- add_groups(ref, inst) |>
     dplyr::count(gender, age_group, score, wt = weight, name = "count")
   fr2 <- frequency_frame(freq, s, inst, n_boot = 0, prior_mass = 0)
   n1 <- norms_all_cells(fr1, s, inst); n2 <- norms_all_cells(fr2, s, inst)

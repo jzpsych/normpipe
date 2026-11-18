@@ -15,9 +15,10 @@ cache_status(out_dir)
 \arguments{
 \item{...}{Objects the result depends on (for `cache_key()`).}
 
-\item{out_dir}{Output folder.}
+\item{out_dir}{Output folder of a run (the cache is its subfolder
+`cache`).}
 
-\item{name}{Name of the result (file `<name>.rds`).}
+\item{name}{Name of the result (file `cache/<name>.rds`).}
 
 \item{key}{Key of the result ([cache_key()]).}
 
@@ -27,17 +28,19 @@ cache_status(out_dir)
 }
 \value{
 `cache_key()`: a string. `cache_get()`: the result.
-  `cache_status()`: a tibble with `name`, `key`, `version`, `time` and
-  `exists`.
+  `cache_status()`: a tibble with `name`, `key`, `version`, `time`,
+  `adopted` (`"TRUE"` for a result taken over by [migrate_output()] that
+  has not been used since) and `exists`.
 }
 \description{
 [run_norming()] caches every intermediate result as `<name>.rds` in
-`out_dir` and records in `cache_manifest.csv` a key for it: a hash of the
+`out_dir/cache` and records in `cache/cache_manifest.csv` a key for it: a
+hash of the
 part of the configuration, the data and the upstream results that the
 result depends on. On the next run a result is reused when its key is
 unchanged and recomputed otherwise, so that a change of the configuration,
 the data or the package's computation only recomputes what depends on it.
-An outdated file is not deleted but moved to `out_dir/superseded/`.
+An outdated file is not deleted but moved to `cache/superseded/`.
 }
 \details{
 `cache_key()` builds a key from any R objects. `cache_get()` returns the

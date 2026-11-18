@@ -5,8 +5,8 @@
 # population margins with the survey package. A margin is a data frame with
 # one or more variables and a column Freq (population counts); several
 # margins (e.g. age band x gender, education, region) are raked jointly by
-# iterative proportional fitting. make_margins() builds the age band x gender
-# margin from single-year population counts. Raked weights are trimmed at
+# iterative proportional fitting. make_margins() builds the margin of the
+# reporting cells (e.g. age band x gender) from population counts. Raked weights are trimmed at
 # trim_quantile; by default the trimmed weights are raked again (and trimmed
 # again) until the margins hold and no weight exceeds the cap, so that
 # trimming does not undo the calibration. Weights are finally rescaled to the
@@ -15,16 +15,17 @@
 
 #' Population margins and raking of survey weights
 #'
-#' `make_margins()` aggregates single-year population counts to the
-#' reporting cells of an instrument. `rake_to_margins()` rakes the design
+#' `make_margins()` aggregates population counts to the reporting cells of
+#' an instrument. `rake_to_margins()` rakes the design
 #' weights of the reference sample to one or more population margins with
 #' [survey::rake()], trims them at `trim_quantile` and rescales them to the
 #' net sample size. [run_norming()] calls it when `margins` is given.
 #'
 #' Each margin is a data frame whose columns other than `Freq` name the
 #' raking variables of that margin (e.g. `age_group` and `gender`, or
-#' `education`). `age_group` is derived from `age` and the age bands of the
-#' instrument; every other variable must be a column of `meta`. A single data
+#' `education`). Band columns such as `age_group` are derived from the
+#' numeric variable and the bands of the instrument; every other variable
+#' must be a column of `meta`. A single data
 #' frame is one margin (the joint distribution of its variables), a list of
 #' data frames are several margins raked jointly.
 #'
@@ -35,30 +36,32 @@
 #' `tol`. With `rerake = FALSE` the weights are capped once, as in normpipe
 #' 0.1.0, and the margins hold only approximately.
 #'
-#' Respondents with a missing raking variable (or a gender outside the
-#' configured cells, when `gender` is a raking variable) cannot be raked.
+#' Respondents with a missing raking variable (or, for a raking variable
+#' that is also a group variable, a category outside the configured groups)
+#' cannot be raked.
 #' With `incomplete = "drop"` (default) they are dropped; with
 #' `incomplete = "keep"` they keep their design weight, rescaled by the mean
 #' ratio of raked to design weights, and enter the norms of every table that
 #' does not condition on the missing variable (e.g. the overall norms).
 #'
-#' @param pop Tibble with `age` (single years), `gender` and `Freq`
-#'   (population counts).
+#' @param pop Tibble with the variables of the norm groups (e.g. `age` in
+#'   single years and `gender`) and `Freq` (population counts).
 #' @param inst Instrument ([read_instrument()]).
 #' @return `make_margins()`: data frame with the cell variables and `Freq`.
 #' @export
 make_margins <- function(pop, inst) {
   vars <- cell_vars(inst)
-  d <- add_age_group(pop, inst)
-  if ("gender" %in% vars) d <- filter(d, .data$gender %in% inst$cells$gender)
-  if ("age_group" %in% vars) d <- filter(d, !is.na(.data$age_group))
+  d <- add_groups(pop, inst)
+  miss <- setdiff(vars, names(d))
+  if (length(miss)) stop("make_margins(): `pop` lacks ", paste(miss, collapse = ", "), ".")
+  d <- d[in_groups(d, inst, vars), , drop = FALSE]
   d %>% count(across(all_of(vars)), wt = .data$Freq, name = "Freq") %>%
     as.data.frame()
 }
 
 #' @rdname make_margins
-#' @param meta Tibble with `id`, `age`, `gender`, `weight` (design weight; 1
-#'   if none) and any further raking variables.
+#' @param meta Tibble with `id`, `weight` (design weight; 1 if none), the
+#'   variables of the norm groups and any further raking variables.
 #' @param margins A margin data frame (e.g. the output of `make_margins()`)
 #'   or a list of margin data frames (see Details).
 #' @param trim_quantile Raked weights are capped at this quantile; `1`
@@ -83,13 +86,12 @@ rake_to_margins <- function(meta, margins, inst, trim_quantile = 0.99,
   margins <- map(margins, as.data.frame)
   vars_by_margin <- map(margins, \(m) setdiff(names(m), "Freq"))
   vars <- unique(unlist(vars_by_margin))
-  d <- add_age_group(meta, inst) %>% filter(!is.na(.data$weight))
+  d <- add_groups(meta, inst) %>% filter(!is.na(.data$weight))
   miss <- setdiff(vars, names(d))
   if (length(miss)) stop("Raking variable(s) not in meta: ", paste(miss, collapse = ", "))
   ok <- rep(TRUE, nrow(d))
   for (v in vars) ok <- ok & !is.na(d[[v]])
-  if ("gender" %in% vars && !is.null(inst$cells$gender))
-    ok <- ok & as.character(d$gender) %in% inst$cells$gender
+  ok <- ok & in_groups(d, inst, intersect(vars, categorical_sources(inst)))
   dr <- d[ok, ]
   # common factor levels of sample and population for every raking variable
   for (v in vars) {

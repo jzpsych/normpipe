@@ -19,13 +19,13 @@ rake_to_margins(
 )
 }
 \arguments{
-\item{pop}{Tibble with `age` (single years), `gender` and `Freq`
-(population counts).}
+\item{pop}{Tibble with the variables of the norm groups (e.g. `age` in
+single years and `gender`) and `Freq` (population counts).}
 
 \item{inst}{Instrument ([read_instrument()]).}
 
-\item{meta}{Tibble with `id`, `age`, `gender`, `weight` (design weight; 1
-if none) and any further raking variables.}
+\item{meta}{Tibble with `id`, `weight` (design weight; 1 if none), the
+variables of the norm groups and any further raking variables.}
 
 \item{margins}{A margin data frame (e.g. the output of `make_margins()`)
 or a list of margin data frames (see Details).}
@@ -53,8 +53,8 @@ Details).}
   deviation from a margin, number of rows not raked).
 }
 \description{
-`make_margins()` aggregates single-year population counts to the
-reporting cells of an instrument. `rake_to_margins()` rakes the design
+`make_margins()` aggregates population counts to the reporting cells of
+an instrument. `rake_to_margins()` rakes the design
 weights of the reference sample to one or more population margins with
 [survey::rake()], trims them at `trim_quantile` and rescales them to the
 net sample size. [run_norming()] calls it when `margins` is given.
@@ -62,8 +62,9 @@ net sample size. [run_norming()] calls it when `margins` is given.
 \details{
 Each margin is a data frame whose columns other than `Freq` name the
 raking variables of that margin (e.g. `age_group` and `gender`, or
-`education`). `age_group` is derived from `age` and the age bands of the
-instrument; every other variable must be a column of `meta`. A single data
+`education`). Band columns such as `age_group` are derived from the
+numeric variable and the bands of the instrument; every other variable
+must be a column of `meta`. A single data
 frame is one margin (the joint distribution of its variables), a list of
 data frames are several margins raked jointly.
 
@@ -74,8 +75,9 @@ less than `tol` (relative) and no weight exceeds the cap by more than
 `tol`. With `rerake = FALSE` the weights are capped once, as in normpipe
 0.1.0, and the margins hold only approximately.
 
-Respondents with a missing raking variable (or a gender outside the
-configured cells, when `gender` is a raking variable) cannot be raked.
+Respondents with a missing raking variable (or, for a raking variable
+that is also a group variable, a category outside the configured groups)
+cannot be raked.
 With `incomplete = "drop"` (default) they are dropped; with
 `incomplete = "keep"` they keep their design weight, rescaled by the mean
 ratio of raked to design weights, and enter the norms of every table that

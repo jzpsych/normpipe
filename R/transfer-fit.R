@@ -165,8 +165,8 @@ fit_convergence <- function(fit) {
 #' flat in phi). From about phi = 1e12 on, the beta-binomial probabilities
 #' that brms evaluates for the log-likelihood (extraDistr) lose precision; at
 #' 1e14 and above they are near one for every value, so that LOO of such
-#' draws is meaningless (family pilot 2026-11-12: chains stuck at phi ~ 1e19
-#' had a log-likelihood of 0 for every donor). Counts draws in which phi
+#' draws is meaningless (chains stuck at phi ~ 1e19 have a log-likelihood
+#' of 0 for every donor). Counts draws in which phi
 #' exceeds 1e10 for any donor; 0 for other families.
 #' @noRd
 phi_plateau <- function(fit) {

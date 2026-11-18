@@ -33,8 +33,8 @@
 #' With `rerake = TRUE` (default) the capped weights are raked again and
 #' capped again, up to `max_rounds` times, until every margin deviates by
 #' less than `tol` (relative) and no weight exceeds the cap by more than
-#' `tol`. With `rerake = FALSE` the weights are capped once, as in normpipe
-#' 0.1.0, and the margins hold only approximately.
+#' `tol`. With `rerake = FALSE` the weights are capped once, and the margins
+#' hold only approximately.
 #'
 #' Respondents with a missing raking variable (or, for a raking variable
 #' that is also a group variable, a category outside the configured groups)

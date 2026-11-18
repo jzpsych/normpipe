@@ -88,9 +88,6 @@ read_instrument <- function(path) {
   ), class = "normpipe_instrument")
 }
 
-#' Warn about configuration keys the package does not know (typos would
-#' otherwise be ignored silently)
-#' @noRd
 #' Export settings: formats written by the export stage and the language of
 #' the labels in the JSON file
 #' @noRd
@@ -105,6 +102,9 @@ build_export <- function(x = NULL) {
   list(formats = fm, language = lang)
 }
 
+#' Warn about configuration keys the package does not know (typos would
+#' otherwise be ignored silently)
+#' @noRd
 check_keys <- function(block, known, where) {
   bad <- setdiff(names(block), known)
   if (length(bad))

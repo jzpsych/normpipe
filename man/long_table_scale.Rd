@@ -2,21 +2,36 @@
 % Please edit documentation in R/export.R
 \name{long_table_scale}
 \alias{long_table_scale}
+\alias{export_compact}
 \alias{export_platform_tables}
+\alias{export_json}
 \alias{export_portal_json}
 \title{Export formats}
 \usage{
 long_table_scale(nm, cond, intg, s, inst, route = "direct")
 
-export_platform_tables(long, cont, dir)
+export_compact(long, cont, dir, inst = NULL)
+
+export_platform_tables(long, cont, dir, inst = NULL)
+
+export_json(
+  long,
+  inst,
+  file,
+  citation = "",
+  title = NULL,
+  interval = c("integrated", "conditional", "band"),
+  language = inst$export$language \%||\% "en"
+)
 
 export_portal_json(
   long,
   inst,
   file,
   citation = "",
-  title = "Bayesianische Normen",
-  interval = c("integrated", "conditional", "band")
+  title = NULL,
+  interval = c("integrated", "conditional", "band"),
+  language = "de"
 )
 }
 \arguments{
@@ -34,7 +49,7 @@ export_portal_json(
 
 \item{long}{Long norm table (rows of `long_table_scale()`).}
 
-\item{cont}{Continuous-age norms ([weighted_norms_continuous()] with
+\item{cont}{Continuous norms ([weighted_norms_continuous()] with
 `version`, `scale`, `level`) or `NULL`.}
 
 \item{dir}{Output folder.}
@@ -43,10 +58,14 @@ export_portal_json(
 
 \item{citation}{Citation string of the norms.}
 
-\item{title}{Title prefix of every source (followed by the version label).}
+\item{title}{Title prefix of every source (followed by the version
+label); default "Bayesian norms" in the language of the file.}
 
 \item{interval}{Interval written per row: `"integrated"`, `"conditional"`
 or `"band"`.}
+
+\item{language}{`"en"` or `"de"`: language of the keys and labels;
+default `export$language` of the instrument.}
 }
 \value{
 `long_table_scale()`: tibble with `version`, `scale`, `level`,
@@ -54,28 +73,34 @@ or `"band"`.}
   `pctl_hi`, `T`, `T_lo`, `T_hi`, `T_cond_lo`, `T_cond_hi`, `T_int_lo`,
   `T_int_hi`, `extrapolation`, `n_eff`.
 
-`export_platform_tables()`: paths of the written files
-  (invisibly).
+`export_compact()`: paths of the written files (invisibly).
 
-`export_portal_json()`: `file` (invisibly).
+`export_json()`: `file` (invisibly).
 }
 \description{
 `long_table_scale()` assembles the long norm table of one scale: one row
-per reporting cell and raw score with percentile rank, T, norm band,
-score-conditional and integrated interval (interpolated to every raw
-score) and an extrapolation flag (median percentile rank below 0.5 % or
-above 99.5 %). [run_norming()] binds these tables to
-`norm_tables_long.csv`.
+per reporting cell and raw score with percentile rank, standard score,
+norm band, score-conditional and integrated interval (interpolated to
+every raw score) and an extrapolation flag (median percentile rank below
+0.5 % or above 99.5 %). [run_norming()] binds these tables to
+`norm_tables.csv`.
 }
 \details{
-`export_platform_tables()` writes compact per-version tables for scoring
-software: `norms_<version>.csv` (raw score, T, integrated interval,
-percentile rank, extrapolation flag; cells `gender`/`age_group`, `"all"`
-for the overall table) and, with continuous-age norms,
-`norms_<version>_age.rds`.
+`export_compact()` writes compact per-version tables for scoring
+software: `norms_<version>.csv` (raw score, standard score, integrated
+interval, percentile rank, extrapolation flag; the cell variables are
+`"all"` in the overall table) and, with continuous norms,
+`norms_<version>_continuous.rds`. Scores are rounded to the `digits` of
+the norm scale.
 
-`export_portal_json()` writes one JSON norm file per instrument for a web
-portal: one source per version, the reporting cells as groups, and per row
-raw score, cell, T and interval limits. The keys and the default labels
-of this format are German (e.g. `quellen`, `gruppen`, `zeilen`).
+`export_json()` writes one JSON norm file per instrument for web
+applications: one source per version, the reporting cells as groups, and
+per row raw score, cell, standard score and interval limits. Keys and
+labels are English or German (`export$language` of the instrument).
+
+`export_platform_tables()` and `export_portal_json()` are the names of
+these two functions in normpipe < 0.4 and are kept as aliases.
+
+The standard-score columns carry the name of the norm scale of the
+instrument (`norm_scale`); they are documented for the default, `T`.
 }

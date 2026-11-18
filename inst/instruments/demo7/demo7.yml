@@ -48,11 +48,14 @@ versions:
         metric: mean
         model: grm
         calibrate_from: full_a
-cells:
-  gender: [m, f]
-  age_breaks: [18, 40, 65, Inf]
-  ages: [18, 80]
-  kernel: {half_width0: 4, min_neff: 60, max_half_width: 12}
+groups:
+  by:
+    gender: [m, f]
+    age: {breaks: [18, 40, 65, Inf]}
+  continuous:
+    variable: age
+    range: [18, 80]
+    kernel: {half_width0: 4, min_neff: 60, max_half_width: 12}
 uncertainty:
   prior_mass: 1
   n_boot: 100

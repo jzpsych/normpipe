@@ -3,8 +3,9 @@
 #
 # A DRAW FRAME is a long tibble with one row per (respondent or pseudo
 # respondent) x draw, columns
-#   id, age, gender, weight, score, shape, .draw
-# plus age_group when the instrument has age bands. score is on the raw metric
+#   id, <group variables>, weight, score, shape, .draw
+# plus the band column of every banded group variable (e.g. age, gender and
+# age_group). score is on the raw metric
 # of the scale. `shape` is the gamma shape of the row in the Bayesian
 # bootstrap (1 for an observed respondent, the prior mass of a
 # pseudo-observation, the count of a frequency row). Every norm function
@@ -41,8 +42,9 @@
 #'
 #' A draw frame is the common input of all norm functions: a long tibble with
 #' one row per respondent (or pseudo-respondent) and draw, with columns `id`,
-#' `age`, `gender`, `weight`, `score`, `shape`, `.draw` (plus `age_group` when
-#' the instrument has age bands). Every reporting cell receives `prior_mass`
+#' the variables of the norm groups ([group_sources()], e.g. `age` and
+#' `gender`), `weight`, `score`, `shape`, `.draw` and the band column of
+#' every banded variable (e.g. `age_group`). Every reporting cell receives `prior_mass`
 #' pseudo-observations spread uniformly over the attainable scores (a
 #' Dirichlet prior with uniform base measure); `n_boot` Bayesian-bootstrap
 #' draws then replace each weight by `weight / shape * Gamma(shape)`. Summed
@@ -55,7 +57,8 @@
 #' published or aggregated frequency tables can be normed without raw data.
 #'
 #' @param ref Tibble with `id`, `weight`, `score` (raw metric; prorated
-#'   scores are snapped to the grid) and optionally `age` and `gender`.
+#'   scores are snapped to the grid) and the variables of the norm groups
+#'   (a missing variable is `NA` for everybody).
 #' @param s Scale specification ([get_scale()]).
 #' @param inst Instrument ([read_instrument()]).
 #' @param n_boot Number of Bayesian-bootstrap draws; 0 gives the point frame
@@ -87,15 +90,11 @@ direct_frame <- function(ref, s, inst, n_boot = 0L,
     scores_imp <- scores_imp[keep, , drop = FALSE]
     if (anyNA(scores_imp)) stop("direct_frame(): imputed scores are missing for respondents with a score.")
   }
-  obs <- ref %>%
-    filter(keep) %>%
-    transmute(id = as.character(.data$id),   # prior rows carry character ids
-              age = if ("age" %in% names(ref)) .data$age else NA_real_,
-              gender = if ("gender" %in% names(ref)) as.character(.data$gender) else NA_character_,
-              weight = .data$weight,
-              score = snap_to_grid(.data$score, s),
-              shape = 1)
-  obs <- add_age_group(obs, inst)
+  ref <- ref[keep, , drop = FALSE]
+  obs <- bind_cols(tibble(id = as.character(ref$id)),   # prior rows carry character ids
+                   frame_columns(ref, inst),
+                   tibble(weight = ref$weight, score = snap_to_grid(ref$score, s), shape = 1))
+  obs <- add_groups(obs, inst)
   n_person <- nrow(obs)
   if (prior_mass > 0) obs <- bind_rows(obs, prior_rows(obs, s, inst, prior_mass))
   fr <- bootstrap_frame(obs, n_boot, seed %||% sum(utf8ToInt(paste0("direct_", s$version, "_", s$id))))
@@ -111,8 +110,9 @@ direct_frame <- function(ref, s, inst, n_boot = 0L,
 
 #' @rdname direct_frame
 #' @param freq Tibble with columns `score` (raw metric), `count` (weighted
-#'   counts allowed) and the cell variables of the instrument (`gender`,
-#'   `age_group`) or `age` (single years). An optional column `n_obs` holds
+#'   counts allowed) and the cell variables of the instrument (e.g. `gender`
+#'   and `age_group`; instead of a band column the numeric variable itself,
+#'   e.g. `age` in single years, can be given). An optional column `n_obs` holds
 #'   the unweighted counts (default `count`); it is the gamma shape of the
 #'   row, so that weighted counts keep the right amount of uncertainty. Rows
 #'   of cells not covered by the configuration enter the overall table only.
@@ -121,64 +121,62 @@ frequency_frame <- function(freq, s, inst, n_boot = 0L,
                             prior_mass = inst$uncertainty$prior_mass,
                             seed = NULL) {
   stopifnot(all(c("score", "count") %in% names(freq)))
-  obs <- tibble(
-    id = paste0("freq_", seq_len(nrow(freq))),
-    age = if ("age" %in% names(freq)) as.numeric(freq$age) else NA_real_,
-    gender = if ("gender" %in% names(freq)) as.character(freq$gender) else NA_character_,
-    weight = as.numeric(freq$count),
-    score = snap_to_grid(as.numeric(freq$score), s),
-    shape = if ("n_obs" %in% names(freq)) as.numeric(freq$n_obs) else as.numeric(freq$count))
-  if ("age_group" %in% names(freq)) {
-    obs$age_group <- factor(freq$age_group, levels = age_group_levels(inst))
-  } else obs <- add_age_group(obs, inst)
+  obs <- bind_cols(
+    tibble(id = paste0("freq_", seq_len(nrow(freq)))),
+    frame_columns(freq, inst),
+    tibble(weight = as.numeric(freq$count),
+           score = snap_to_grid(as.numeric(freq$score), s),
+           shape = if ("n_obs" %in% names(freq)) as.numeric(freq$n_obs) else as.numeric(freq$count)))
+  for (v in inst$groups$vars)
+    if (v$type == "banded" && v$col %in% names(freq))
+      obs[[v$col]] <- factor(freq[[v$col]], levels = band_levels(v))
+  obs <- add_groups(obs, inst)
   obs <- obs[obs$weight > 0, ]
   if (prior_mass > 0) obs <- bind_rows(obs, prior_rows(obs, s, inst, prior_mass))
   bootstrap_frame(obs, n_boot, seed %||% sum(utf8ToInt(paste0("freq_", s$version, "_", s$id))))
 }
 
-age_group_levels <- function(inst) {
-  if (is.null(inst$cells$age_breaks)) return(NULL)
-  levels(cut(inst$cells$age_breaks[1], inst$cells$age_breaks, right = FALSE))
-}
-
 #' Pseudo-observations of the Dirichlet prior
 #'
-#' For every reporting cell one row per attainable score (and, when ages are
-#' known, per integer age of the band, so that the kernel norms see the same
-#' prior). The rows of a cell add up to prior_mass effective observations:
-#' shape = prior_mass / K / n_ages, weight = shape x (sum of weights / Kish N)
-#' of the cell. Cells are the configured gender x age-band combinations; a
-#' frame without gender or age uses the one overall cell.
+#' For every reporting cell one row per attainable score (and, when the
+#' continuous variable of the instrument is one of the banded group
+#' variables, per value of that variable in the band, so that the kernel
+#' norms see the same prior). The rows of a cell add up to prior_mass
+#' effective observations: shape = prior_mass / K / n_values, weight =
+#' shape x (sum of weights / Kish N) of the cell. Cells are the combinations
+#' of the configured groups; a frame without group variables uses the one
+#' overall cell.
 #' @noRd
 prior_rows <- function(obs, s, inst, prior_mass) {
   K <- length(s$grid)
   vars <- intersect(cell_vars(inst), names(obs))
-  cells <- obs
-  if ("gender" %in% vars) cells <- filter(cells, .data$gender %in% inst$cells$gender)
-  if ("age_group" %in% vars) cells <- filter(cells, !is.na(.data$age_group))
-  cells <- cells %>%
+  cells <- obs[in_groups(obs, inst, vars), , drop = FALSE] %>%
     group_by(across(all_of(vars))) %>%
     summarise(prior_scale = sum(.data$weight) / (sum(.data$weight)^2 / sum(.data$weight^2)),
               .groups = "drop")
   if (nrow(cells) == 0)       # no cell structure: one overall cell
     cells <- tibble(prior_scale = sum(obs$weight) / (sum(obs$weight)^2 / sum(obs$weight^2)))
-  with_ages <- "age_group" %in% vars && !is.null(inst$cells$ages) && any(!is.na(obs$age))
-  if (with_ages) {
-    age_tbl <- tibble(age = inst$cells$ages) %>%
-      mutate(age_group = cut(.data$age, inst$cells$age_breaks, right = FALSE)) %>%
-      filter(!is.na(.data$age_group)) %>%
-      add_count(.data$age_group, name = "n_ages")
-    rows <- inner_join(cells, age_tbl, by = "age_group", relationship = "many-to-many")
+  cont <- inst$groups$continuous
+  cv <- cont$variable
+  band <- if (!is.null(cv) && !is.null(inst$groups$vars[[cv]]) &&
+              inst$groups$vars[[cv]]$type == "banded") inst$groups$vars[[cv]]
+  with_values <- !is.null(band) && band$col %in% vars && any(!is.na(obs[[cv]]))
+  if (with_values) {
+    val_tbl <- tibble(.value = cont$values)
+    val_tbl[[band$col]] <- cut(val_tbl$.value, band$breaks, right = FALSE)
+    val_tbl <- val_tbl[!is.na(val_tbl[[band$col]]), ] %>%
+      add_count(.data[[band$col]], name = "n_values")
+    rows <- inner_join(cells, val_tbl, by = band$col, relationship = "many-to-many")
+    rows[[cv]] <- as.numeric(rows$.value)
   } else {
-    rows <- mutate(cells, age = NA_real_, n_ages = 1L)
+    rows <- mutate(cells, n_values = 1L)
   }
   rows <- rows %>%
     crossing(score = s$grid) %>%
-    mutate(shape = prior_mass / K / .data$n_ages,
+    mutate(shape = prior_mass / K / .data$n_values,
            weight = .data$prior_scale * .data$shape,
            id = paste0("prior_", row_number()))
-  if (!"gender" %in% names(rows)) rows$gender <- NA_character_
-  if (!"age_group" %in% names(rows) && "age_group" %in% names(obs)) rows$age_group <- NA
+  for (cn in setdiff(names(obs), names(rows))) rows[[cn]] <- NA
   rows[, names(obs)]
 }
 

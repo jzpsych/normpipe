@@ -274,7 +274,9 @@ invariance_flags <- function(tab, cfi = 0.010, rmsea = 0.015, srmr = 0.010) {
 #'   `collapsed` names the items whose categories were merged.
 #' @examples
 #' \dontrun{
-#' inst <- read_instrument(system.file("instruments/pid5/pid5.yml", package = "normpipe"))
+#' inst <- read_instrument(system.file("instruments/demo7/demo7_transfer.yml",
+#'                                     package = "normpipe"))
+#' ref <- simulate_reference(inst, N = 1500)
 #' invariance_sequence(ref$items, ref$meta$gender, inst, label = "gender")
 #' }
 #' @export
@@ -340,7 +342,8 @@ invariance_screen <- function(items, group, inst, scales = NULL,
   missing <- match.arg(missing)
   if (is.null(scales)) {
     reg <- scale_registry(inst)
-    scales <- reg$outcome[reg$version == reg$version[1] & reg$level == "facet"]
+    first <- reg$outcome[reg$version == reg$version[1]]
+    scales <- first[map_lgl(first, \(o) is.null(get_scale(inst, o)$components))]
   }
   map_dfr(scales, \(o) {
     s <- get_scale(inst, o)
@@ -356,7 +359,7 @@ invariance_screen <- function(items, group, inst, scales = NULL,
 #'
 #' The standard set of analyses: the bridge items across the samples
 #' (reference sample and donor samples, pairwise and listwise), the bridge
-#' items across the reporting cells (gender, age band) within the reference
+#' items across the groups of every group variable (e.g. gender, age band) within the reference
 #' sample, and the scale-by-scale screen across the same cells in the donor
 #' samples. With `missing: {method: impute}`, respondents below
 #' `min_answered` are left out as in the norming run; skipped items of the
@@ -385,9 +388,10 @@ run_invariance <- function(reference, donors = NULL, inst, out_dir = NULL,
                            min_cat_n = 10, reference_label = "reference") {
   cells <- cell_vars(inst)
   cell_group <- function(meta, v) {
-    meta <- add_age_group(meta, inst)
+    meta <- add_groups(meta, inst)
     g <- meta[[v]]
-    if (v == "gender") g[!g %in% inst$cells$gender] <- NA
+    spec <- group_of_col(inst, v)
+    if (spec$type == "categorical") g[!g %in% spec$levels] <- NA
     factor(g)
   }
   say <- function(...) message(format(Sys.time(), "%H:%M:%S"), " invariance: ", ...)

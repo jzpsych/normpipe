@@ -1,78 +1,78 @@
 {
   "instrument": "demo7",
-  "erzeugt": "2026-11-05",
-  "bezugsgruppen": ["geschlecht", "alter", "gesamt"],
-  "quellen": [
+  "created": "2026-11-18",
+  "grouping": ["gender", "age", "overall"],
+  "sources": [
     {
       "id": "full",
-      "art": "bayesianisch",
-      "titel": "Bayesianische Normen Full form",
-      "zitation": "",
-      "kennwert": "T",
-      "dezimalen_kennwert": 1,
-      "intervall": {
-        "art": "grenzen",
-        "niveau": 95,
-        "erklaerung": "95-%-Intervall f<c3><bc>r den wahren T-Wert der Person, einschlie<c3><9f>lich der Unsicherheit der Normwerte"
+      "type": "bayesian",
+      "title": "Bayesian norms Full form",
+      "citation": "",
+      "score": "T",
+      "score_digits": 1,
+      "interval": {
+        "type": "limits",
+        "level": 95,
+        "description": "95 % interval for the person's true T score, including the uncertainty of the norm values"
       },
-      "skalen": [
+      "scales": [
         {
           "id": "a",
           "label": "Scale A (items 1-4, mean)",
           "level": "facet",
           "metric": "mean",
           "items": [1, 2, 3, 4],
-          "gruppen": [
+          "groups": [
             {
               "id": "f_18_40_",
               "label": "f [18,40)",
               "n_eff": 132,
-              "geschlecht": "f",
-              "alter": "[18,40)"
+              "gender": "f",
+              "age": "[18,40)"
             },
             {
               "id": "f_40_65_",
               "label": "f [40,65)",
               "n_eff": 134,
-              "geschlecht": "f",
-              "alter": "[40,65)"
+              "gender": "f",
+              "age": "[40,65)"
             },
             {
               "id": "f_65_Inf_",
               "label": "f [65,Inf)",
               "n_eff": 103,
-              "geschlecht": "f",
-              "alter": "[65,Inf)"
+              "gender": "f",
+              "age": "[65,Inf)"
             },
             {
               "id": "m_18_40_",
               "label": "m [18,40)",
               "n_eff": 101,
-              "geschlecht": "m",
-              "alter": "[18,40)"
+              "gender": "m",
+              "age": "[18,40)"
             },
             {
               "id": "m_40_65_",
               "label": "m [40,65)",
               "n_eff": 128,
-              "geschlecht": "m",
-              "alter": "[40,65)"
+              "gender": "m",
+              "age": "[40,65)"
             },
             {
               "id": "m_65_Inf_",
               "label": "m [65,Inf)",
               "n_eff": 94,
-              "geschlecht": "m",
-              "alter": "[65,Inf)"
+              "gender": "m",
+              "age": "[65,Inf)"
             },
             {
               "id": "overall",
-              "label": "Gesamt",
+              "label": "Overall",
               "n_eff": 688
             }
           ],
-          "spalten": ["roh", "gruppe", "T", "T_unten", "T_oben", "extrapolation"],
-          "zeilen": [
+          "columns": ["raw", "group", "T", "T_lo", "T_hi", "extrapolation"],
+          "rows": [
             [
               0,
               "f [18,40)",
@@ -1481,57 +1481,57 @@
           "level": "domain",
           "metric": "mean_of_means",
           "items": [1, 2, 3, 4, 5, 6, 7, 8],
-          "gruppen": [
+          "groups": [
             {
               "id": "f_18_40_",
               "label": "f [18,40)",
               "n_eff": 137,
-              "geschlecht": "f",
-              "alter": "[18,40)"
+              "gender": "f",
+              "age": "[18,40)"
             },
             {
               "id": "f_40_65_",
               "label": "f [40,65)",
               "n_eff": 127,
-              "geschlecht": "f",
-              "alter": "[40,65)"
+              "gender": "f",
+              "age": "[40,65)"
             },
             {
               "id": "f_65_Inf_",
               "label": "f [65,Inf)",
               "n_eff": 97,
-              "geschlecht": "f",
-              "alter": "[65,Inf)"
+              "gender": "f",
+              "age": "[65,Inf)"
             },
             {
               "id": "m_18_40_",
               "label": "m [18,40)",
               "n_eff": 127,
-              "geschlecht": "m",
-              "alter": "[18,40)"
+              "gender": "m",
+              "age": "[18,40)"
             },
             {
               "id": "m_40_65_",
               "label": "m [40,65)",
               "n_eff": 122,
-              "geschlecht": "m",
-              "alter": "[40,65)"
+              "gender": "m",
+              "age": "[40,65)"
             },
             {
               "id": "m_65_Inf_",
               "label": "m [65,Inf)",
               "n_eff": 87,
-              "geschlecht": "m",
-              "alter": "[65,Inf)"
+              "gender": "m",
+              "age": "[65,Inf)"
             },
             {
               "id": "overall",
-              "label": "Gesamt",
+              "label": "Overall",
               "n_eff": 694
             }
           ],
-          "spalten": ["roh", "gruppe", "T", "T_unten", "T_oben", "extrapolation"],
-          "zeilen": [
+          "columns": ["raw", "group", "T", "T_lo", "T_hi", "extrapolation"],
+          "rows": [
             [
               0,
               "f [18,40)",
@@ -4284,57 +4284,57 @@
           "level": "facet",
           "metric": "sum",
           "items": [5, 6, 7, 8],
-          "gruppen": [
+          "groups": [
             {
               "id": "f_18_40_",
               "label": "f [18,40)",
               "n_eff": 125,
-              "geschlecht": "f",
-              "alter": "[18,40)"
+              "gender": "f",
+              "age": "[18,40)"
             },
             {
               "id": "f_40_65_",
               "label": "f [40,65)",
               "n_eff": 144,
-              "geschlecht": "f",
-              "alter": "[40,65)"
+              "gender": "f",
+              "age": "[40,65)"
             },
             {
               "id": "f_65_Inf_",
               "label": "f [65,Inf)",
               "n_eff": 96,
-              "geschlecht": "f",
-              "alter": "[65,Inf)"
+              "gender": "f",
+              "age": "[65,Inf)"
             },
             {
               "id": "m_18_40_",
               "label": "m [18,40)",
               "n_eff": 136,
-              "geschlecht": "m",
-              "alter": "[18,40)"
+              "gender": "m",
+              "age": "[18,40)"
             },
             {
               "id": "m_40_65_",
               "label": "m [40,65)",
               "n_eff": 131,
-              "geschlecht": "m",
-              "alter": "[40,65)"
+              "gender": "m",
+              "age": "[40,65)"
             },
             {
               "id": "m_65_Inf_",
               "label": "m [65,Inf)",
               "n_eff": 80,
-              "geschlecht": "m",
-              "alter": "[65,Inf)"
+              "gender": "m",
+              "age": "[65,Inf)"
             },
             {
               "id": "overall",
-              "label": "Gesamt",
+              "label": "Overall",
               "n_eff": 710
             }
           ],
-          "spalten": ["roh", "gruppe", "T", "T_unten", "T_oben", "extrapolation"],
-          "zeilen": [
+          "columns": ["raw", "group", "T", "T_lo", "T_hi", "extrapolation"],
+          "rows": [
             [
               0,
               "f [18,40)",
@@ -5743,57 +5743,57 @@
           "level": "total",
           "metric": "mean",
           "items": [1, 2, 3, 4, 5, 6, 7, 8],
-          "gruppen": [
+          "groups": [
             {
               "id": "f_18_40_",
               "label": "f [18,40)",
               "n_eff": 109,
-              "geschlecht": "f",
-              "alter": "[18,40)"
+              "gender": "f",
+              "age": "[18,40)"
             },
             {
               "id": "f_40_65_",
               "label": "f [40,65)",
               "n_eff": 147,
-              "geschlecht": "f",
-              "alter": "[40,65)"
+              "gender": "f",
+              "age": "[40,65)"
             },
             {
               "id": "f_65_Inf_",
               "label": "f [65,Inf)",
               "n_eff": 109,
-              "geschlecht": "f",
-              "alter": "[65,Inf)"
+              "gender": "f",
+              "age": "[65,Inf)"
             },
             {
               "id": "m_18_40_",
               "label": "m [18,40)",
               "n_eff": 122,
-              "geschlecht": "m",
-              "alter": "[18,40)"
+              "gender": "m",
+              "age": "[18,40)"
             },
             {
               "id": "m_40_65_",
               "label": "m [40,65)",
               "n_eff": 114,
-              "geschlecht": "m",
-              "alter": "[40,65)"
+              "gender": "m",
+              "age": "[40,65)"
             },
             {
               "id": "m_65_Inf_",
               "label": "m [65,Inf)",
               "n_eff": 85,
-              "geschlecht": "m",
-              "alter": "[65,Inf)"
+              "gender": "m",
+              "age": "[65,Inf)"
             },
             {
               "id": "overall",
-              "label": "Gesamt",
+              "label": "Overall",
               "n_eff": 673
             }
           ],
-          "spalten": ["roh", "gruppe", "T", "T_unten", "T_oben", "extrapolation"],
-          "zeilen": [
+          "columns": ["raw", "group", "T", "T_lo", "T_hi", "extrapolation"],
+          "rows": [
             [
               0,
               "f [18,40)",
@@ -8544,74 +8544,74 @@
     },
     {
       "id": "short",
-      "art": "bayesianisch",
-      "titel": "Bayesianische Normen Short form",
-      "zitation": "",
-      "kennwert": "T",
-      "dezimalen_kennwert": 1,
-      "intervall": {
-        "art": "grenzen",
-        "niveau": 95,
-        "erklaerung": "95-%-Intervall f<c3><bc>r den wahren T-Wert der Person, einschlie<c3><9f>lich der Unsicherheit der Normwerte"
+      "type": "bayesian",
+      "title": "Bayesian norms Short form",
+      "citation": "",
+      "score": "T",
+      "score_digits": 1,
+      "interval": {
+        "type": "limits",
+        "level": 95,
+        "description": "95 % interval for the person's true T score, including the uncertainty of the norm values"
       },
-      "skalen": [
+      "scales": [
         {
           "id": "a",
           "label": "Scale A short (items 1-2)",
           "level": "facet",
           "metric": "mean",
           "items": [1, 2],
-          "gruppen": [
+          "groups": [
             {
               "id": "f_18_40_",
               "label": "f [18,40)",
               "n_eff": 111,
-              "geschlecht": "f",
-              "alter": "[18,40)"
+              "gender": "f",
+              "age": "[18,40)"
             },
             {
               "id": "f_40_65_",
               "label": "f [40,65)",
               "n_eff": 125,
-              "geschlecht": "f",
-              "alter": "[40,65)"
+              "gender": "f",
+              "age": "[40,65)"
             },
             {
               "id": "f_65_Inf_",
               "label": "f [65,Inf)",
               "n_eff": 103,
-              "geschlecht": "f",
-              "alter": "[65,Inf)"
+              "gender": "f",
+              "age": "[65,Inf)"
             },
             {
               "id": "m_18_40_",
               "label": "m [18,40)",
               "n_eff": 115,
-              "geschlecht": "m",
-              "alter": "[18,40)"
+              "gender": "m",
+              "age": "[18,40)"
             },
             {
               "id": "m_40_65_",
               "label": "m [40,65)",
               "n_eff": 120,
-              "geschlecht": "m",
-              "alter": "[40,65)"
+              "gender": "m",
+              "age": "[40,65)"
             },
             {
               "id": "m_65_Inf_",
               "label": "m [65,Inf)",
               "n_eff": 77,
-              "geschlecht": "m",
-              "alter": "[65,Inf)"
+              "gender": "m",
+              "age": "[65,Inf)"
             },
             {
               "id": "overall",
-              "label": "Gesamt",
+              "label": "Overall",
               "n_eff": 648
             }
           ],
-          "spalten": ["roh", "gruppe", "T", "T_unten", "T_oben", "extrapolation"],
-          "zeilen": [
+          "columns": ["raw", "group", "T", "T_lo", "T_hi", "extrapolation"],
+          "rows": [
             [
               0,
               "f [18,40)",

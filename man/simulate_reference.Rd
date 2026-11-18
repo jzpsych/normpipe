@@ -27,7 +27,8 @@ simulate_reference(
 \item{gender_effect}{Shift of every second trait for `gender == "f"`.}
 }
 \value{
-List with `meta` (`id`, `age`, `gender`, `weight`), `items` (data
+List with `meta` (`id`, `age`, `gender`, `weight` and any other
+  variable of the norm groups), `items` (data
   frame of response codes, columns named as in the item table), `theta`
   (true traits), `trait` (trait index per item) and `params` (true slopes
   and intercepts).
@@ -35,8 +36,11 @@ List with `meta` (`id`, `age`, `gender`, `weight`), `items` (data
 \description{
 One trait per version-"full" facet-level scale is drawn from a correlated
 normal (shared general factor), items follow a GRM with random slopes and
-thresholds on the configured categories; age and gender shift the traits.
-Intended for tests, examples and simulation checks.
+thresholds on the configured categories. The sample has the variables
+`age` and `gender`, which shift the traits (their range and codes follow
+the norm groups when the instrument uses these variables), and uniformly
+drawn values of every other variable of the norm groups. Intended for
+tests, examples and simulation checks.
 }
 \examples{
 inst <- read_instrument(system.file("instruments/demo7/demo7.yml",

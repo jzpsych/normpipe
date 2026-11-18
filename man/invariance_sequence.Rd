@@ -63,7 +63,9 @@ When the robust test statistic of the configural higher-order
 }
 \examples{
 \dontrun{
-inst <- read_instrument(system.file("instruments/pid5/pid5.yml", package = "normpipe"))
+inst <- read_instrument(system.file("instruments/demo7/demo7_transfer.yml",
+                                    package = "normpipe"))
+ref <- simulate_reference(inst, N = 1500)
 invariance_sequence(ref$items, ref$meta$gender, inst, label = "gender")
 }
 }

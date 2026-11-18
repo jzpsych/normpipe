@@ -31,7 +31,7 @@ overall table.}
 \item{probs}{Lower and upper quantile of the norm band.}
 
 \item{clamp}{Percentile ranks are clamped to `[clamp, 1 - clamp]` before
-the T transformation.}
+the transformation to the norm scale.}
 
 \item{convention}{`"midpoint"` or `"cumulative"` (see Details).}
 }
@@ -42,11 +42,15 @@ the T transformation.}
   `cells` (all configured cells) and `overall`.
 }
 \description{
-Percentile ranks and T values for every attainable score of a scale, per
-reporting cell (gender x age band, as configured) or overall. In every
-draw of the draw frame the weighted percentile rank is computed; the
-median over draws is the norm value, the quantiles `probs` the norm band.
-T = 50 + 10 * qnorm(PR), with PR clamped to `[clamp, 1 - clamp]`.
+Percentile ranks and standard scores for every attainable score of a
+scale, per reporting cell (the combinations of the configured norm groups,
+e.g. gender x age band) or overall. In every draw of the draw frame the
+weighted percentile rank is computed; the median over draws is the norm
+value, the quantiles `probs` the norm band. The standard score is
+`mean + sd * qnorm(PR)` on the norm scale of the instrument (`norm_scale`,
+default T = 50 + 10 z), with PR clamped to `[clamp, 1 - clamp]`. Its
+columns carry the name of the norm scale; the documentation writes them
+for the default, `T`.
 }
 \details{
 Two percentile conventions are available (`uncertainty$pctl_convention`):

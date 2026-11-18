@@ -2,23 +2,26 @@
 % Please edit documentation in R/transfer-project.R
 \name{crosscheck_table}
 \alias{crosscheck_table}
-\title{Leave-own-domain-out cross-check of a directly observed scale}
+\title{Cross-check of the projection on a directly observed scale}
 \usage{
-crosscheck_table(direct, lodo)
+crosscheck_table(direct, projected, inst = NULL)
 }
 \arguments{
-\item{direct, lodo}{Outputs of [norms_all_cells()] for the direct and the
-projected norms of the same scale.}
+\item{direct, projected}{Outputs of [norms_all_cells()] for the direct and
+the projected norms of the same scale.}
+
+\item{inst}{Instrument (for the name of the norm scale; default `T`).}
 }
 \value{
 Tibble with the cell variables (`NA` for the overall table),
-  `raw`, `T_direct`, `T_lo_direct`, `T_hi_direct`, `T_lodo`, `T_lo_lodo`,
-  `T_hi_lodo`, `dT` (projected minus direct) and `inside` (the projected
-  point value lies in the band of the direct norms).
+  `raw`, `T_direct`, `T_lo_direct`, `T_hi_direct`, `T_projected`,
+  `T_lo_projected`, `T_hi_projected`, `difference` (projected minus
+  direct) and `inside` (the projected point value lies in the band of the
+  direct norms).
 }
 \description{
 Compares the norms of a directly observed scale with the norms obtained
 when the same scale is projected through the transfer module without its
 own bridge items (`transfer$crosscheck`). [run_norming()] writes the
-result of all cross-check outcomes to `c1_crosscheck.csv`.
+result of all cross-check outcomes to `transfer_crosscheck.csv`.
 }

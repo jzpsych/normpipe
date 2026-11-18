@@ -1,7 +1,8 @@
 #' normpipe: population-referenced norms with two layers of uncertainty
 #'
 #' normpipe derives norm tables for self-report questionnaires from a weighted
-#' reference sample (or from published frequency tables) and reports two kinds
+#' reference sample (or from published frequency tables), for any groups of
+#' the sample and on any standard-score metric, and reports two kinds
 #' of uncertainty: the uncertainty of the norm values themselves (norm bands
 #' from a Bayesian bootstrap under a Dirichlet prior over the attainable
 #' scores) and the measurement error of the individual score (score-conditional
@@ -14,7 +15,7 @@
 #'
 #' @section Main functions:
 #' * Configuration: [read_instrument()], [scale_registry()], [get_scale()],
-#'   [scale_routes()]
+#'   [scale_routes()], [cell_vars()], [add_groups()]
 #' * Scoring: [score_scales()], [item_indices()], [item_values()]
 #' * Weights: [make_margins()], [rake_to_margins()]
 #' * Norms: [direct_frame()], [frequency_frame()], [weighted_norms()],
@@ -23,9 +24,9 @@
 #'   [make_blocks()], [conditional_tables()], [integrated_intervals()],
 #'   [marginal_reliability()]
 #' * Transfer module: [bridge_scores()], [fit_transfer()], [project_outcome()]
-#' * Export: [long_table_scale()], [export_platform_tables()],
-#'   [export_portal_json()]
-#' * Driver and test data: [run_norming()], [simulate_reference()]
+#' * Export: [long_table_scale()], [export_compact()], [export_json()]
+#' * Driver and test data: [run_norming()], [migrate_output()],
+#'   [simulate_reference()]
 #'
 #' @keywords internal
 #' @import dplyr

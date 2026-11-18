@@ -1,22 +1,23 @@
 Package: normpipe
 Type: Package
 Title: Population-Referenced Norms with Two Layers of Uncertainty for Any Questionnaire
-Version: 0.3.1
+Version: 0.4.0
 Authors@R: c(
     person("Johannes", "Zimmermann", email = "jz@uni-kassel.de",
            role = c("aut", "cre")))
 Description: Derives norm tables for self-report questionnaires from a
     weighted reference sample or from published frequency tables. An
     instrument is described in a configuration file (items with their
-    response categories and values, versions and scales, reporting cells);
-    the pipeline then produces weighted percentile and T norms per reporting
-    cell with credible bands from a Bayesian bootstrap under a Dirichlet
-    prior over the attainable scores, continuous-age kernel norms,
-    score-conditional and integrated intervals for the individual from
-    calibrated graded response and bifactor models, and several export
-    formats. An optional transfer module projects scales that the reference
-    sample did not answer from bridge items, using donor samples and Bayesian
-    distributional regression.
+    response categories and values, versions and scales, the groups for
+    which norms are tabulated, the norm scale); the pipeline then produces
+    weighted percentile ranks and standard scores (T by default) per group
+    with credible bands from a Bayesian bootstrap under a Dirichlet prior
+    over the attainable scores, kernel norms along a continuous variable
+    such as age, score-conditional and integrated intervals for the
+    individual from calibrated graded response and bifactor models, and
+    several export formats. An optional transfer module projects scales that
+    the reference sample did not answer from bridge items, using donor
+    samples and Bayesian distributional regression.
 License: GPL-3
 URL: https://github.com/jzpsych/normpipe
 BugReports: https://github.com/jzpsych/normpipe/issues

@@ -44,7 +44,7 @@ List with `fit`, `screen` and `decision` (see
 \description{
 The standard set of analyses: the bridge items across the samples
 (reference sample and donor samples, pairwise and listwise), the bridge
-items across the reporting cells (gender, age band) within the reference
+items across the groups of every group variable (e.g. gender, age band) within the reference
 sample, and the scale-by-scale screen across the same cells in the donor
 samples. With `missing: {method: impute}`, respondents below
 `min_answered` are left out as in the norming run; skipped items of the

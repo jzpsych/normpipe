@@ -12,7 +12,7 @@
 #' Observed items of a transfer outcome
 #'
 #' Items of the outcome that belong to a bridge block in use. Items of
-#' excluded blocks (e.g. in the leave-own-domain-out cross-check) count as
+#' excluded blocks (e.g. in the cross-check of the projection) count as
 #' unobserved.
 #' @noRd
 observed_items <- function(s, inst, exclude = NULL) {
@@ -125,10 +125,10 @@ observed_part <- function(d, info, wt = info$w, D = 1) {
 #' smallest attainable sum (non-zero when item values do not start at 0).
 #' With observed items, their value range is removed from the modelled sum.
 #'
-#' A dense scale (mean of facet means of unequal length, tabulated on a
+#' A dense scale (mean of component means of unequal length, tabulated on a
 #' reporting grid) has no count structure: modelled as a count out of the
-#' grid steps, the beta-binomial loses the floor and widens the upper tail
-#' (PID-5 domain pilot, 2026-11). Such scales keep the censored families.
+#' grid steps, the beta-binomial loses the floor and widens the upper tail.
+#' Such scales keep the censored families.
 #' @noRd
 bb_scale <- function(s, known = NULL, values = NULL) {
   if (isTRUE(s$dense))

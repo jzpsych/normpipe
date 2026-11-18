@@ -2,8 +2,8 @@
 # instrument.R -- the instrument configuration
 #
 # Everything that is specific to an instrument (items and response format,
-# versions and scales, reporting cells, uncertainty settings, measurement and
-# transfer options) is read from one YAML file per instrument and turned into
+# versions and scales, norm groups, norm scale, uncertainty settings,
+# measurement and transfer options) is read from one YAML file per instrument and turned into
 # an object of class "normpipe_instrument". Every other part of the package
 # works from that object alone. The full list of keys is in
 # vignette("instrument-config").
@@ -31,7 +31,7 @@
 #' Read an instrument configuration
 #'
 #' Parses an instrument YAML file (or a list with the same structure), builds
-#' the item table, the reporting cells and every scale of every version
+#' the item table, the norm groups and every scale of every version
 #' (attainable scores, reporting grid, model), and fills in the defaults of
 #' the `uncertainty`, `measurement`, `transfer` and `weighting` blocks. The keys are
 #' documented in `vignette("instrument-config", package = "normpipe")`.
@@ -40,8 +40,8 @@
 #' @return An object of class `normpipe_instrument`: a list with `id`, `name`,
 #'   `items` (item table: `item`, `col`, `categories`, `values` in integer
 #'   units, `reverse`, `K`; attribute `unit`), `versions` (each with its
-#'   `scales`), `cells`, `measurement`, `transfer`, `weighting`,
-#'   `uncertainty` and `source` (normalised path of the YAML file).
+#'   `scales`), `groups` (the norm groups, see [cell_vars()]), `norm_scale`,
+#'   `export`, `measurement`, `transfer`, `weighting`, `uncertainty` and `source` (normalised path of the YAML file).
 #' @seealso [scale_registry()], [get_scale()]
 #' @examples
 #' inst <- read_instrument(system.file("instruments/demo7/demo7.yml",
@@ -52,20 +52,24 @@
 read_instrument <- function(path) {
   cfg <- if (is.character(path)) yaml::yaml.load(paste(readLines(path, encoding = "UTF-8", warn = FALSE), collapse = "\n")) else path
   stopifnot(!is.null(cfg$id), !is.null(cfg$items), !is.null(cfg$versions))
-  check_keys(cfg, c("id", "name", "report_step", "items", "versions", "cells", "reference",
-                    "donors", "measurement", "transfer", "weighting", "missing", "uncertainty"),
+  check_keys(cfg, c("id", "name", "report_step", "items", "versions", "groups", "cells",
+                    "norm_scale", "export", "reference", "donors", "measurement", "transfer",
+                    "weighting", "missing", "uncertainty"),
              "the instrument")
+  check_keys(cfg$export, c("formats", "language"), "`export`")
   check_keys(cfg$missing, c("method", "reference", "n_imputations", "min_answered", "covariates",
                             "neighbours"), "`missing`")
   check_keys(cfg$weighting, c("trim_quantile", "rerake", "incomplete"), "`weighting`")
   check_keys(cfg$uncertainty, c("prior_mass", "n_boot", "n_param_draws", "n_draws", "pctl_clamp",
                                 "probs", "pctl_convention"), "`uncertainty`")
   items <- build_item_table(cfg$items)
-  cells <- build_cells(cfg$cells)
+  groups <- build_groups(cfg$groups, cfg$cells)
   versions <- build_versions(cfg$versions, items, cfg$report_step %||% 0.01)
   structure(list(
     id = cfg$id, name = cfg$name %||% cfg$id,
-    items = items, versions = versions, cells = cells,
+    items = items, versions = versions, groups = groups,
+    norm_scale = build_norm_scale(cfg$norm_scale),
+    export = build_export(cfg$export),
     reference = cfg$reference %||% list(),
     donors = cfg$donors %||% list(),
     measurement = modifyList(list(source = "fit", engine = "auto",
@@ -82,6 +86,20 @@ read_instrument <- function(path) {
       cfg$uncertainty %||% list()),
     source = if (is.character(path)) normalizePath(path) else NA_character_
   ), class = "normpipe_instrument")
+}
+
+#' Export settings: formats written by the export stage and the language of
+#' the labels in the JSON file
+#' @noRd
+build_export <- function(x = NULL) {
+  x <- x %||% list()
+  fm <- as.character(unlist(x$formats %||% c("long", "compact", "json")))
+  bad <- setdiff(fm, c("long", "compact", "json"))
+  if (length(bad)) stop("export$formats: unknown format(s) ", paste(bad, collapse = ", "),
+                        " (known: long, compact, json).")
+  lang <- x$language %||% "en"
+  if (!lang %in% c("de", "en")) stop("export$language must be \"de\" or \"en\".")
+  list(formats = fm, language = lang)
 }
 
 #' Warn about configuration keys the package does not know (typos would
@@ -108,10 +126,15 @@ print.normpipe_instrument <- function(x, ...) {
     cat("  version '", v, "': ", length(sc), " scales (",
         paste(unique(map_chr(sc, "level")), collapse = ", "), ")\n", sep = "")
   }
-  cat("  cells: gender ", if (is.null(x$cells$gender)) "no" else
-      paste(x$cells$gender, collapse = "/"), ", age bands ",
-      if (is.null(x$cells$age_breaks)) "no" else
-        paste(x$cells$age_breaks, collapse = "/"), "\n", sep = "")
+  if (!length(x$groups$vars)) cat("  groups: none (overall norms only)\n")
+  for (v in x$groups$vars)
+    cat("  groups by ", v$name, ": ",
+        if (v$type == "categorical") paste(v$levels, collapse = "/") else
+          paste0("bands ", paste(v$breaks, collapse = "/")), "\n", sep = "")
+  if (!is.null(x$groups$continuous))
+    cat("  continuous norms over ", x$groups$continuous$variable, " (",
+        paste(range(x$groups$continuous$values), collapse = "-"), ")\n", sep = "")
+  cat("  norm scale: ", x$norm_scale$name, " (mean ", x$norm_scale$mean, ", sd ", x$norm_scale$sd, ")\n", sep = "")
   invisible(x)
 }
 
@@ -151,46 +174,6 @@ build_item_table <- function(it) {
          "in the scale's offset if needed).")
   attr(tab, "unit") <- unit
   tab
-}
-
-# --- Reporting cells -----------------------------------------------------------
-build_cells <- function(cl) {
-  cl <- cl %||% list()
-  list(
-    gender = if (is.null(cl$gender)) NULL else as.character(cl$gender),
-    age_breaks = if (is.null(cl$age_breaks)) NULL else
-      as.numeric(unlist(lapply(cl$age_breaks, \(b) if (identical(b, "Inf")) Inf else b))),
-    ages = if (is.null(cl$ages)) NULL else as.integer(cl$ages[1]):as.integer(cl$ages[2]),
-    overall = cl$overall %||% TRUE,
-    kernel = modifyList(list(half_width0 = 4, min_neff = 150, max_half_width = 12),
-                        cl$kernel %||% list())
-  )
-}
-
-#' Reporting-cell variables of an instrument
-#'
-#' @param inst Instrument ([read_instrument()]).
-#' @return Character vector: `"gender"` when gender cells are configured,
-#'   `"age_group"` when age bands are configured (possibly empty).
-#' @export
-cell_vars <- function(inst) {
-  c(if (!is.null(inst$cells$gender)) "gender",
-    if (!is.null(inst$cells$age_breaks)) "age_group")
-}
-
-#' Add the age band of the reporting cells to a data frame
-#'
-#' @param d Data frame with a numeric column `age`.
-#' @param inst Instrument ([read_instrument()]).
-#' @return `d` with a factor column `age_group` (bands closed on the left, as
-#'   configured in `cells$age_breaks`); unchanged when the instrument has no
-#'   age bands or `d` already has `age_group`.
-#' @export
-add_age_group <- function(d, inst) {
-  if (is.null(inst$cells$age_breaks)) return(d)
-  if (!"age_group" %in% names(d) && "age" %in% names(d))
-    d$age_group <- cut(d$age, inst$cells$age_breaks, right = FALSE)
-  d
 }
 
 # --- Versions and scales -------------------------------------------------------

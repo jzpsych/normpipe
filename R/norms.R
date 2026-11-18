@@ -4,8 +4,10 @@
 # Input is a draw frame (frames.R). Per cell and draw, the weighted percentile
 # rank of every attainable score is computed; across draws the median gives
 # the norm value and the quantiles `probs` (default 2.5 % and 97.5 %) the norm
-# band. T = 50 + 10 * qnorm(percentile rank), with the percentile rank clamped
-# to [pctl_clamp, 1 - pctl_clamp].
+# band. The standard score is mean + sd * qnorm(percentile rank) on the norm
+# scale of the instrument (default T: 50 + 10 z), with the percentile rank
+# clamped to [pctl_clamp, 1 - pctl_clamp]. The score columns carry the name
+# of the norm scale (`T`, `T_lo`, `T_hi` by default).
 #
 # Percentile convention (uncertainty$pctl_convention):
 #   "midpoint"    PR = P(X < x) + P(X = x) / 2, the classical percentile rank
@@ -31,15 +33,17 @@ wecdf_at <- function(score, weight, grid, convention = "midpoint") {
   (at_or_below + below) / 2
 }
 
-pctl_to_T <- function(p, clamp = 1e-4) 50 + 10 * qnorm(pmin(pmax(p, clamp), 1 - clamp))
-
 #' Band norms of one scale with norm bands
 #'
-#' Percentile ranks and T values for every attainable score of a scale, per
-#' reporting cell (gender x age band, as configured) or overall. In every
-#' draw of the draw frame the weighted percentile rank is computed; the
-#' median over draws is the norm value, the quantiles `probs` the norm band.
-#' T = 50 + 10 * qnorm(PR), with PR clamped to `[clamp, 1 - clamp]`.
+#' Percentile ranks and standard scores for every attainable score of a
+#' scale, per reporting cell (the combinations of the configured norm groups,
+#' e.g. gender x age band) or overall. In every draw of the draw frame the
+#' weighted percentile rank is computed; the median over draws is the norm
+#' value, the quantiles `probs` the norm band. The standard score is
+#' `mean + sd * qnorm(PR)` on the norm scale of the instrument (`norm_scale`,
+#' default T = 50 + 10 z), with PR clamped to `[clamp, 1 - clamp]`. Its
+#' columns carry the name of the norm scale; the documentation writes them
+#' for the default, `T`.
 #'
 #' Two percentile conventions are available (`uncertainty$pctl_convention`):
 #' `"midpoint"` (default), PR = P(X < x) + P(X = x) / 2, the classical
@@ -54,7 +58,7 @@ pctl_to_T <- function(p, clamp = 1e-4) 50 + 10 * qnorm(pmin(pmax(p, clamp), 1 - 
 #'   overall table.
 #' @param probs Lower and upper quantile of the norm band.
 #' @param clamp Percentile ranks are clamped to `[clamp, 1 - clamp]` before
-#'   the T transformation.
+#'   the transformation to the norm scale.
 #' @param convention `"midpoint"` or `"cumulative"` (see Details).
 #' @return `weighted_norms()`: tibble with the cell variables, `raw`,
 #'   `pctl_med`, `pctl_lo`, `pctl_hi`, `T`, `T_lo`, `T_hi`, `n_eff` (Kish
@@ -68,9 +72,9 @@ weighted_norms <- function(fr, s, inst, cells = cell_vars(inst),
   n_bad <- sum(is.na(fr$score) | is.na(fr$weight))
   if (n_bad > 0) stop("weighted_norms(): ", n_bad, " rows with NA score or weight.")
   grid <- s$grid
-  fr <- add_age_group(fr, inst)
-  if ("gender" %in% cells) fr <- filter(fr, .data$gender %in% inst$cells$gender)
-  if ("age_group" %in% cells) fr <- filter(fr, !is.na(.data$age_group))
+  sc <- inst$norm_scale
+  fr <- add_groups(fr, inst)
+  fr <- fr[in_groups(fr, inst, cells), , drop = FALSE]
   if (!length(cells)) fr$.cell <- "overall"
   grp <- if (length(cells)) cells else ".cell"
   neff <- fr %>% filter(.data$.draw == min(.data$.draw), .data$shape >= 1) %>%
@@ -84,12 +88,12 @@ weighted_norms <- function(fr, s, inst, cells = cell_vars(inst),
               pctl_lo = quantile(.data$pctl, probs[1]),
               pctl_hi = quantile(.data$pctl, probs[2]),
               .groups = "drop") %>%
-    mutate(T = pctl_to_T(.data$pctl_med, clamp),
-           T_lo = pctl_to_T(.data$pctl_lo, clamp),
-           T_hi = pctl_to_T(.data$pctl_hi, clamp)) %>%
+    mutate(T = pctl_to_norm(.data$pctl_med, clamp, sc),
+           T_lo = pctl_to_norm(.data$pctl_lo, clamp, sc),
+           T_hi = pctl_to_norm(.data$pctl_hi, clamp, sc)) %>%
     left_join(neff, by = grp)
   if (!length(cells)) out$.cell <- NULL
-  out
+  norm_public(out, inst)
 }
 
 #' @rdname weighted_norms
@@ -98,42 +102,56 @@ norms_all_cells <- function(fr, s, inst) {
   cv <- cell_vars(inst)
   res <- list()
   if (length(cv)) res$cells <- weighted_norms(fr, s, inst, cells = cv)
-  if (isTRUE(inst$cells$overall) || !length(cv))
+  if (isTRUE(inst$groups$overall) || !length(cv))
     res$overall <- weighted_norms(fr, s, inst, cells = character(0))
   res
 }
 
-#' Continuous-age kernel norms
+#' Norms as a smooth function of a continuous variable (kernel norms)
 #'
-#' Per gender (or pooled when the instrument has no gender cells) and target
-#' age, respondents are weighted by an Epanechnikov kernel around the target
-#' age whose half-width widens from half_width0 until the local effective
-#' sample size reaches min_neff, up to max_half_width. Pseudo-observations of
-#' the prior carry their own ages (prior_rows), so they enter the kernel like
-#' everybody else. Kernel settings come from `cells$kernel` of the instrument.
+#' For every value of the continuous variable of the instrument
+#' (`groups$continuous`, typically age in years), respondents are weighted
+#' by an Epanechnikov kernel around that value whose half-width widens from
+#' `half_width0` until the local effective sample size reaches `min_neff`,
+#' up to `max_half_width`. This is done separately for every combination of
+#' the categorical variables in `groups$continuous$by` (default: all
+#' categorical group variables, e.g. per gender), or pooled when there is
+#' none. Pseudo-observations of the prior carry their own values of the
+#' variable, so they enter the kernel like everybody else.
 #'
 #' @inheritParams weighted_norms
-#' @param ages Integer target ages (default `cells$ages` of the instrument).
-#' @return Tibble with `gender`, `age`, `half_width`, `n_eff_local`, `raw`,
-#'   `pctl_med`, `pctl_lo`, `pctl_hi`, `T`, `T_lo`, `T_hi`.
+#' @param values Target values of the continuous variable (default: the
+#'   configured range in steps of one).
+#' @param ages Name of `values` in normpipe < 0.4; still accepted.
+#' @return Tibble with the `by` variables, the continuous variable,
+#'   `half_width`, `n_eff_local`, `raw`, `pctl_med`, `pctl_lo`, `pctl_hi`,
+#'   `T`, `T_lo`, `T_hi`.
 #' @export
-weighted_norms_continuous <- function(fr, s, inst, ages = inst$cells$ages,
+weighted_norms_continuous <- function(fr, s, inst, values = inst$groups$continuous$values,
                                       probs = inst$uncertainty$probs,
                                       clamp = inst$uncertainty$pctl_clamp,
-                                      convention = inst$uncertainty$pctl_convention %||% "midpoint") {
-  k <- inst$cells$kernel
+                                      convention = inst$uncertainty$pctl_convention %||% "midpoint",
+                                      ages = NULL) {
+  cont <- inst$groups$continuous
+  if (is.null(cont)) stop("The instrument has no `groups$continuous` block.")
+  if (!is.null(ages)) values <- ages
+  k <- cont$kernel; cv <- cont$variable; sc <- inst$norm_scale
   grid <- s$grid
-  fr <- filter(fr, !is.na(.data$age))
-  genders <- if (is.null(inst$cells$gender)) NA_character_ else inst$cells$gender
-  map_dfr(genders, \(g) {
-    pg <- if (is.na(g)) fr else filter(fr, .data$gender == g)
+  fr <- fr[!is.na(fr[[cv]]), , drop = FALSE]
+  by <- cont$by
+  # one row per combination of the `by` groups, in the configured order
+  combos <- if (length(by)) do.call(expand.grid, c(map(inst$groups$vars[rev(by)], "levels"),
+                                                   stringsAsFactors = FALSE))[by] else data.frame(.all = NA)
+  map_dfr(seq_len(nrow(combos)), \(ci) {
+    pg <- fr
+    for (b in by) pg <- pg[!is.na(pg[[b]]) & pg[[b]] == combos[[b]][ci], , drop = FALSE]
     draws <- sort(unique(pg$.draw))
     persons <- pg %>% group_by(.data$id) %>%
-      summarise(age = first(.data$age), w_bar = mean(.data$weight), .groups = "drop")
-    map_dfr(ages, \(a) {
+      summarise(.x = first(.data[[cv]]), w_bar = mean(.data$weight), .groups = "drop")
+    map_dfr(values, \(a) {
       hw <- k$half_width0
       repeat {
-        kern <- pmax(0, 1 - ((persons$age - a) / hw)^2)
+        kern <- pmax(0, 1 - ((persons$.x - a) / hw)^2)
         wk <- persons$w_bar * kern
         neff <- if (sum(wk) > 0) sum(wk)^2 / sum(wk^2) else 0
         if (neff >= k$min_neff || hw >= k$max_half_width) break
@@ -144,15 +162,18 @@ weighted_norms_continuous <- function(fr, s, inst, ages = inst$cells$ages,
         filter(.data$w > 0)
       P <- sapply(draws, \(d) { x <- pa[pa$.draw == d, ]; wecdf_at(x$score, x$w, grid, convention) })
       P <- matrix(P, nrow = length(grid))
-      tibble(gender = g, age = a, half_width = hw, n_eff_local = neff, raw = grid,
-             pctl_med = apply(P, 1, median),
-             pctl_lo = apply(P, 1, quantile, probs[1]),
-             pctl_hi = apply(P, 1, quantile, probs[2])) %>%
-        mutate(T = pctl_to_T(.data$pctl_med, clamp),
-               T_lo = pctl_to_T(.data$pctl_lo, clamp),
-               T_hi = pctl_to_T(.data$pctl_hi, clamp))
+      out <- tibble(.x = a, half_width = hw, n_eff_local = neff, raw = grid,
+                    pctl_med = apply(P, 1, median),
+                    pctl_lo = apply(P, 1, quantile, probs[1]),
+                    pctl_hi = apply(P, 1, quantile, probs[2])) %>%
+        mutate(T = pctl_to_norm(.data$pctl_med, clamp, sc),
+               T_lo = pctl_to_norm(.data$pctl_lo, clamp, sc),
+               T_hi = pctl_to_norm(.data$pctl_hi, clamp, sc))
+      names(out)[1] <- cv
+      if (length(by)) out <- bind_cols(as_tibble(combos[rep(ci, nrow(out)), by, drop = FALSE]), out)
+      out
     })
-  })
+  }) %>% norm_public(inst)
 }
 
 #' Kish effective sample size

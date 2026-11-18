@@ -72,8 +72,8 @@ the configuration file.
 |---|---|
 | `prepare` | scoring of the reference sample, optional raking to population margins, route per scale (direct, frequency or transfer) |
 | `calibrate` | calibration of the item models in the reference (or a separate calibration) sample: graded response model per scale, bifactor model for scales made of components, composite route for totals |
-| `transfer` | optional transfer module: Bayesian distributional regression (brms) from bridge items to scales the reference sample did not answer, projection into the reference sample |
-| `norms` | percentile ranks and standard scores per reporting cell and overall, with norm bands |
+| `transfer` | optional transfer module: Bayesian distributional regressions (brms), fitted in the donor samples, of the scales the reference sample did not answer on the bridge items |
+| `norms` | draws of the scores and weights of the reference sample per scale (direct route: Bayesian bootstrap; transfer route: projection of the transfer model into the reference sample), from them percentile ranks and standard scores per reporting cell and overall, with norm bands |
 | `continuous_norms` | norms as a smooth function of a continuous variable such as age (Epanechnikov kernel with adaptive half-width) |
 | `intervals_conditional` | score-conditional intervals (summed-score EAP, Lord–Wingersky recursion, population prior of the cell) |
 | `intervals_integrated` | integrated intervals (item-parameter draws × norm-value draws) |

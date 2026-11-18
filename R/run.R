@@ -58,8 +58,11 @@ resolve_stages <- function(stages) {
 #' * `transfer`: transfer models for scales whose items the reference sample
 #'   did not answer (only with `transfer: enabled: true` and `donors`, see
 #'   [fit_transfer()]).
-#' * `norms`: norms per reporting cell and overall, with norm bands
-#'   ([norms_all_cells()]).
+#' * `norms`: draws of the scores and weights of the reference sample for
+#'   every scale ([direct_frame()]; for a scale on the transfer route the
+#'   projection of its transfer model into the reference sample,
+#'   [project_outcome()]), from them the norms per reporting cell and overall,
+#'   with norm bands ([norms_all_cells()]).
 #' * `continuous_norms`: kernel norms along the continuous variable of
 #'   `groups$continuous`, e.g. age ([weighted_norms_continuous()]).
 #' * `intervals_conditional`: score-conditional intervals

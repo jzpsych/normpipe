@@ -52,3 +52,9 @@ others are handled pairwise (not imputed). Writes `invariance_fit.csv`, `invaria
 `invariance_decision.txt` to `out_dir`; none of them contains individual
 data.
 }
+\section{Lifecycle}{
+
+Experimental: the decision rules, arguments and results may change in a
+minor version, with an entry in NEWS.md.
+}
+

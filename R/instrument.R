@@ -48,24 +48,35 @@
 #'                                     package = "normpipe"))
 #' inst
 #' scale_registry(inst)
+#' @section Lifecycle:
+#' Stable since normpipe 1.0.0: the keys of the configuration file and their
+#' defaults are kept, later versions only add keys. The result is a list
+#' whose documented elements are kept.
 #' @export
 read_instrument <- function(path) {
   cfg <- if (is.character(path)) yaml::yaml.load(paste(readLines(path, encoding = "UTF-8", warn = FALSE), collapse = "\n")) else path
   stopifnot(!is.null(cfg$id), !is.null(cfg$items), !is.null(cfg$versions))
+  check_requires(cfg$requires)
   check_keys(cfg, c("id", "name", "report_step", "items", "versions", "groups", "cells",
                     "norm_scale", "export", "reference", "donors", "measurement", "transfer",
-                    "weighting", "missing", "uncertainty"),
+                    "weighting", "missing", "uncertainty", "notes", "requires"),
              "the instrument")
   check_keys(cfg$export, c("formats", "language"), "`export`")
   check_keys(cfg$missing, c("method", "reference", "n_imputations", "min_answered", "covariates",
                             "neighbours"), "`missing`")
   check_keys(cfg$weighting, c("trim_quantile", "rerake", "incomplete"), "`weighting`")
   check_keys(cfg$uncertainty, c("prior_mass", "n_boot", "n_param_draws", "n_draws", "pctl_clamp",
-                                "probs", "pctl_convention"), "`uncertainty`")
+                                "probs", "pctl_convention", "n_mc", "seed"), "`uncertainty`")
+  check_keys(cfg$measurement, c("source", "engine", "calibration"), "`measurement`")
+  if (!is.null(cfg$measurement$engine) && !cfg$measurement$engine %in% c("auto", "mirt", "internal"))
+    stop("measurement$engine must be auto, mirt or internal.", call. = FALSE)
+  if (!is.null(cfg$uncertainty$seed) &&
+      !(is.numeric(cfg$uncertainty$seed) && length(cfg$uncertainty$seed) == 1 && !is.na(cfg$uncertainty$seed)))
+    stop("uncertainty$seed must be a single number.", call. = FALSE)
   items <- build_item_table(cfg$items)
   groups <- build_groups(cfg$groups, cfg$cells)
   versions <- build_versions(cfg$versions, items, cfg$report_step %||% 0.01)
-  structure(list(
+  inst <- structure(list(
     id = cfg$id, name = cfg$name %||% cfg$id,
     items = items, versions = versions, groups = groups,
     norm_scale = build_norm_scale(cfg$norm_scale),
@@ -82,10 +93,13 @@ read_instrument <- function(path) {
     uncertainty = modifyList(
       list(prior_mass = 1, n_boot = 200, n_param_draws = 50, n_draws = 500,
            pctl_clamp = 1e-4, probs = c(.025, .975),
-           pctl_convention = "midpoint"),
+           pctl_convention = "midpoint", n_mc = 1500L),
       cfg$uncertainty %||% list()),
+    notes = cfg$notes,
     source = if (is.character(path)) normalizePath(path) else NA_character_
   ), class = "normpipe_instrument")
+  if (!is.null(cfg$transfer)) check_transfer_config(inst)
+  inst
 }
 
 #' Export settings: formats written by the export stage and the language of
@@ -102,14 +116,48 @@ build_export <- function(x = NULL) {
   list(formats = fm, language = lang)
 }
 
-#' Warn about configuration keys the package does not know (typos would
-#' otherwise be ignored silently)
+#' Report configuration keys the package does not know
+#'
+#' An unknown key is an error, so that a typo, or a key of a later version
+#' of the package, cannot silently fall back to a default.
+#' `options(normpipe.unknown_keys = "warn")` turns the error into a warning.
 #' @noRd
 check_keys <- function(block, known, where) {
   bad <- setdiff(names(block), known)
-  if (length(bad))
-    warning("Unknown key(s) in ", where, ": ", paste(bad, collapse = ", "),
-            ". Known keys: ", paste(known, collapse = ", "), ".", call. = FALSE)
+  if (!length(bad)) return(invisible(NULL))
+  msg <- paste0("Unknown key(s) in ", where, ": ", paste(bad, collapse = ", "), ".",
+                near_miss(bad, known), " Known keys: ", paste(known, collapse = ", "), ".")
+  if (identical(getOption("normpipe.unknown_keys", "error"), "warn")) warning(msg, call. = FALSE) else
+    stop(msg, " (A key of a later version of normpipe? options(normpipe.unknown_keys = \"warn\") ",
+         "ignores unknown keys with a warning.)", call. = FALSE)
+  invisible(NULL)
+}
+
+#' " Did you mean ...?" for keys that differ from a known key by a typo
+#' @noRd
+near_miss <- function(bad, known) {
+  if (!length(known)) return("")
+  d <- utils::adist(tolower(bad), tolower(known))
+  hint <- map_chr(seq_along(bad), \(i) {
+    j <- which.min(d[i, ])
+    if (d[i, j] <= max(1, min(2, nchar(known[j]) %/% 4))) paste0("`", known[j], "` instead of `", bad[i], "`") else NA_character_
+  })
+  hint <- hint[!is.na(hint)]
+  if (length(hint)) paste0(" Did you mean ", paste(hint, collapse = "; "), "?") else ""
+}
+
+#' `requires: "1.1"` (or ">= 1.1"): the version of normpipe an instrument file
+#' needs at least
+#' @noRd
+check_requires <- function(req) {
+  if (is.null(req)) return(invisible(NULL))
+  v <- trimws(sub("^\\s*>=\\s*", "", as.character(req)))
+  need <- tryCatch(package_version(v), error = function(e)
+    stop("`requires` must be a version number such as \"1.1\", not '", req, "'.", call. = FALSE))
+  have <- utils::packageVersion("normpipe")
+  if (have < need)
+    stop("This instrument file needs normpipe >= ", v, "; installed is ", have,
+         ". Update the package (remotes::install_github(\"jzpsych/normpipe\")).", call. = FALSE)
   invisible(NULL)
 }
 
@@ -140,6 +188,10 @@ print.normpipe_instrument <- function(x, ...) {
 
 # --- Items ---------------------------------------------------------------------
 build_item_table <- function(it) {
+  check_keys(it, c("n_items", "ids", "prefix", "unit", "categories", "values", "reverse", "overrides"),
+             "`items`")
+  for (ov in it$overrides %||% list())
+    check_keys(ov, c("items", "categories", "values", "reverse"), "`items$overrides`")
   n <- it$n_items %||% length(it$ids)
   ids <- it$ids %||% seq_len(n)
   prefix <- it$prefix %||% "item_"
@@ -181,6 +233,7 @@ build_versions <- function(vs, items, report_step) {
   out <- list()
   for (v in vs) {
     stopifnot(!is.null(v$id), !is.null(v$scales))
+    check_keys(v, c("id", "label", "scales"), paste0("version '", v$id, "'"))
     scales <- list()
     for (s in v$scales) {
       scales[[s$id]] <- build_scale(s, v$id, scales, items, report_step)
@@ -190,8 +243,19 @@ build_versions <- function(vs, items, report_step) {
   out
 }
 
+# Keys of a scale entry the package uses; further keys are kept as metadata
+# (`extra`), with a warning when one looks like a typo of a known key
+SCALE_KEYS <- c("id", "label", "level", "metric", "model", "items", "components", "min_answered",
+                "observed", "calibrate_from", "equal_block_slopes")
+
 build_scale <- function(s, version, scales_so_far, items, report_step) {
   stopifnot(!is.null(s$id))
+  other <- setdiff(names(s), SCALE_KEYS)
+  hint <- near_miss(other, SCALE_KEYS)
+  if (nzchar(hint))
+    warning("Scale '", s$id, "' of version '", version, "': key(s) ", paste(other, collapse = ", "),
+            " are not used by normpipe and are kept as metadata.", hint, call. = FALSE)
+  for (cp in s$components) if (is.list(cp)) check_keys(cp, c("id", "items"), paste0("a component of scale '", s$id, "'"))
   metric <- s$metric %||% "mean"
   stopifnot(metric %in% c("sum", "mean", "mean_of_means"))
   comps <- NULL
@@ -281,6 +345,9 @@ attainable_sums <- function(vals) {
 #'   name used throughout the package), `version`, `scale`, `level`, `metric`,
 #'   `model`, `n_items`, `dense` (tabulated on the reporting grid), `n_rows`
 #'   (rows of the norm table), `raw_min`, `raw_max`, `step`.
+#' @section Lifecycle:
+#' Stable since normpipe 1.0.0: the name, the arguments and the documented
+#' parts of the result are kept; later versions only add to them.
 #' @export
 scale_registry <- function(inst) {
   map_dfr(inst$versions, \(v) map_dfr(v$scales, \(s)
@@ -299,6 +366,9 @@ scale_registry <- function(inst) {
 #'   (attainable summed values in integer units), `grid` (raw scores of the
 #'   norm table), `step`, `dense`, `range`, `min_answered`, `observed` and
 #'   `extra` (further keys of the scale, e.g. `calibrate_from`).
+#' @section Lifecycle:
+#' Stable since normpipe 1.0.0: the name, the arguments and the documented
+#' parts of the result are kept; later versions only add to them.
 #' @export
 get_scale <- function(inst, outcome) {
   for (v in inst$versions) for (s in v$scales)
@@ -316,6 +386,9 @@ get_scale <- function(inst, outcome) {
 #' @param observed_items Item ids answered by the reference sample.
 #' @return [scale_registry()] with an additional column `route`
 #'   (`"direct"` or `"transfer"`).
+#' @section Lifecycle:
+#' Stable since normpipe 1.0.0: the name, the arguments and the documented
+#' parts of the result are kept; later versions only add to them.
 #' @export
 scale_routes <- function(inst, observed_items) {
   reg <- scale_registry(inst)

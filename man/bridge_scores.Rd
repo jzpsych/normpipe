@@ -21,3 +21,10 @@ One predictor per bridge block (mean item value of the block, raw metric),
 their overall mean, and the scored single bridge items. Missing items are
 ignored in the means; a block without any answered item is `NA`.
 }
+\section{Lifecycle}{
+
+Building block, exported for advanced use: it may change in a minor
+version, with an entry in NEWS.md. The pipeline functions that use it are
+stable.
+}
+

@@ -39,7 +39,9 @@ scores are snapped to the grid) and the variables of the norm groups
 \item{prior_mass}{Effective number of pseudo-observations per reporting
 cell; 0 switches the prior off.}
 
-\item{seed}{Random seed; derived from the scale name when `NULL`.}
+\item{seed}{Random seed; derived from the scale name when `NULL` (and
+from `uncertainty$seed` of the instrument when that is set). The
+random-number state of the caller is restored afterwards.}
 
 \item{scores_imp}{Optional matrix of scores from completed data sets
 ([impute_items()]), one row per row of `ref` and one column per
@@ -75,6 +77,12 @@ posterior.
 `frequency_frame()` takes a table of counts per score and cell, so that
 published or aggregated frequency tables can be normed without raw data.
 }
+\section{Lifecycle}{
+
+Stable since normpipe 1.0.0: the name, the arguments and the documented
+parts of the result are kept; later versions only add to them.
+}
+
 \examples{
 inst <- read_instrument(system.file("instruments/demo7/demo7.yml",
                                     package = "normpipe"))

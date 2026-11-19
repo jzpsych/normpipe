@@ -18,3 +18,9 @@ Tibble with one row per scale: `outcome` (`<version>_<scale>`, the
 \description{
 Registry of all scales of an instrument
 }
+\section{Lifecycle}{
+
+Stable since normpipe 1.0.0: the name, the arguments and the documented
+parts of the result are kept; later versions only add to them.
+}
+

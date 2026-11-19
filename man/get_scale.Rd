@@ -21,3 +21,9 @@ List with `id`, `version`, `label`, `level`, `metric`, `model`,
 \description{
 Specification of one scale
 }
+\section{Lifecycle}{
+
+Stable since normpipe 1.0.0: the name, the arguments and the documented
+parts of the result are kept; later versions only add to them.
+}
+

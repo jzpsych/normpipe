@@ -30,6 +30,13 @@ the item table, the norm groups and every scale of every version
 the `uncertainty`, `measurement`, `transfer` and `weighting` blocks. The keys are
 documented in `vignette("instrument-config", package = "normpipe")`.
 }
+\section{Lifecycle}{
+
+Stable since normpipe 1.0.0: the keys of the configuration file and their
+defaults are kept, later versions only add keys. The result is a list
+whose documented elements are kept.
+}
+
 \examples{
 inst <- read_instrument(system.file("instruments/demo7/demo7.yml",
                                     package = "normpipe"))

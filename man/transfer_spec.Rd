@@ -38,3 +38,9 @@ Defaults that depend on the family (the prior of the mean coefficients)
 are resolved per fit by [transfer_data()], because `family` may list
 several candidates.
 }
+\section{Lifecycle}{
+
+Stable since normpipe 1.0.0: the name, the arguments and the documented
+parts of the result are kept; later versions only add to them.
+}
+

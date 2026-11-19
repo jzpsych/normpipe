@@ -28,6 +28,9 @@
 #'   variables of the norm groups); default: every column that is neither a
 #'   bridge score, `id`, `weight` nor `sample`.
 #' @return Draw frame (see [direct_frame()]).
+#' @section Lifecycle:
+#' Stable since normpipe 1.0.0: the name, the arguments and the documented
+#' parts of the result are kept; later versions only add to them.
 #' @export
 project_outcome <- function(fit, pred_frame, s, n_draws = 500, level = NULL,
                             bootstrap_weights = FALSE, vars = NULL) {
@@ -188,6 +191,9 @@ prediction_frames <- function(ref_scores, ref_ids, items_list, fit, inst) {
 #'   `T_lo_projected`, `T_hi_projected`, `difference` (projected minus
 #'   direct) and `inside` (the projected point value lies in the band of the
 #'   direct norms).
+#' @section Lifecycle:
+#' Stable since normpipe 1.0.0: the name, the arguments and the documented
+#' parts of the result are kept; later versions only add to them.
 #' @export
 crosscheck_table <- function(direct, projected, inst = NULL) {
   nn <- if (is.null(inst)) "T" else norm_name(inst)

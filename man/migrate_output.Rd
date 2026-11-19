@@ -48,3 +48,9 @@ same time as the migration is not detected for adopted results. The
 content of the exported tables is not changed; rerun the `export` stage
 to write them in the current format.
 }
+\section{Lifecycle}{
+
+Stable since normpipe 1.0.0: the name, the arguments and the documented
+parts of the result are kept; later versions only add to them.
+}
+

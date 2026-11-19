@@ -1,0 +1,58 @@
+{
+  "normpipe_version": "1.0.0",
+  "format_version": 1,
+  "created": "2026-11-19 19:55:16 UTC",
+  "instrument": {
+    "id": "demo7",
+    "file": "demo7.yml",
+    "file_md5": "01edfba6745898ec3c5d140ebfead5d6",
+    "configuration_hash": "688736eab3f42ea186115ca90485dd68"
+  },
+  "r_version": "R version 4.3.3 (2024-02-29)",
+  "platform": "x86_64-pc-linux-gnu",
+  "packages": {
+    "normpipe": "1.0.0",
+    "brms": "2.20.4",
+    "rstan": "2.32.5",
+    "loo": "2.6.0",
+    "survey": "4.2.1",
+    "statmod": "1.5.0",
+    "numDeriv": "2016.8.1.1",
+    "dplyr": "1.1.4",
+    "tidyr": "1.3.1",
+    "purrr": "1.0.2",
+    "rlang": "1.1.3",
+    "jsonlite": "1.8.8",
+    "lavaan": "0.6.17"
+  },
+  "measurement_engine": "internal",
+  "seed_rule": "per step, derived from the names of the step and the scale",
+  "uncertainty": {
+    "prior_mass": 1,
+    "n_boot": 100,
+    "n_param_draws": 10,
+    "n_draws": 500,
+    "pctl_clamp": 0.0001,
+    "probs": [0.025, 0.975],
+    "pctl_convention": "midpoint",
+    "n_mc": 1500
+  },
+  "weighting": {
+    "raked": false,
+    "kish_neff_design": null,
+    "kish_neff_raked": null
+  },
+  "reference_n": 1500,
+  "scales": {
+    "direct": 5
+  },
+  "stages": [
+    "prepare",
+    "calibrate",
+    "norms",
+    "continuous_norms",
+    "intervals_conditional",
+    "intervals_integrated",
+    "export"
+  ]
+}

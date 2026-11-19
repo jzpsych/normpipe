@@ -26,3 +26,11 @@ Add the band columns of the norm groups to a data frame
 `add_age_group()` is the name of this function in normpipe < 0.4
   and is kept as an alias.
 }
+\section{Lifecycle}{
+
+`add_groups()` is stable since normpipe 1.0.0: the name, the arguments
+and the documented parts of the result are kept; later versions only add
+to them. `add_age_group()` is superseded: it is the name of this function
+in normpipe < 0.4 and is kept as an alias.
+}
+

@@ -34,3 +34,9 @@ is at most `rhat_max`, that did not saturate the tree depth and that have
 no draw on the plateau of large phi (beta-binomial, see `phi_plateau`)
 are eligible; if none is, all are.
 }
+\section{Lifecycle}{
+
+Stable since normpipe 1.0.0: the name, the arguments and the documented
+parts of the result are kept; later versions only add to them.
+}
+

@@ -19,3 +19,10 @@ Prorated scores and rounded published values lie between grid points; the
 nearest attainable score is used (ties go up). Values outside the range are
 clamped.
 }
+\section{Lifecycle}{
+
+Building block, exported for advanced use: it may change in a minor
+version, with an entry in NEWS.md. The pipeline functions that use it are
+stable.
+}
+

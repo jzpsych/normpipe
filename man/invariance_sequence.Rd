@@ -61,6 +61,12 @@ When the robust test statistic of the configural higher-order
   the equivalent domain-residual form (see [invariance_syntax()]); the
   column `form` records this.
 }
+\section{Lifecycle}{
+
+Experimental: the decision rules, arguments and results may change in a
+minor version, with an entry in NEWS.md.
+}
+
 \examples{
 \dontrun{
 inst <- read_instrument(system.file("instruments/demo7/demo7_transfer.yml",

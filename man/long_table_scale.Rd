@@ -71,7 +71,12 @@ default `export$language` of the instrument.}
 `long_table_scale()`: tibble with `version`, `scale`, `level`,
   `route`, `cell`, the cell variables, `raw`, `pctl_med`, `pctl_lo`,
   `pctl_hi`, `T`, `T_lo`, `T_hi`, `T_cond_lo`, `T_cond_hi`, `T_int_lo`,
-  `T_int_hi`, `extrapolation`, `n_eff`.
+  `T_int_hi`, `extrapolation`, `n_eff`, `sum_score`. `sum_score` is the
+  raw score as a whole number: the sum of the item values in units of
+  `items$unit` (with the default unit 1, the sum of the item values), so
+  that tables can be matched without comparing decimal fractions such as
+  1.3333; it is empty for scales tabulated on a reporting grid
+  (`mean_of_means` with components of unequal length).
 
 `export_compact()`: paths of the written files (invisibly).
 
@@ -88,15 +93,17 @@ every raw score) and an extrapolation flag (median percentile rank below
 \details{
 `export_compact()` writes compact per-version tables for scoring
 software: `norms_<version>.csv` (raw score, standard score, integrated
-interval, percentile rank, extrapolation flag; the cell variables are
-`"all"` in the overall table) and, with continuous norms,
+interval, percentile rank, extrapolation flag, summed score; the cell
+variables are `"all"` in the overall table) and, with continuous norms,
 `norms_<version>_continuous.rds`. Scores are rounded to the `digits` of
 the norm scale.
 
 `export_json()` writes one JSON norm file per instrument for web
 applications: one source per version, the reporting cells as groups, and
 per row raw score, cell, standard score and interval limits. Keys and
-labels are English or German (`export$language` of the instrument).
+labels are English or German (`export$language` of the instrument);
+`normpipe_version` and `format_version` (version of the output format)
+are English in both.
 
 `export_platform_tables()` and `export_portal_json()` are the names of
 these two functions in normpipe < 0.4 and are kept as aliases.
@@ -104,3 +111,13 @@ these two functions in normpipe < 0.4 and are kept as aliases.
 The standard-score columns carry the name of the norm scale of the
 instrument (`norm_scale`); they are documented for the default, `T`.
 }
+\section{Lifecycle}{
+
+`long_table_scale()`, `export_compact()` and `export_json()` are stable
+since normpipe 1.0.0: the name, the arguments and the documented parts of
+the result are kept; columns and keys are only added, never renamed or
+removed. `export_platform_tables()` and `export_portal_json()` are
+superseded: they are the names of the two export functions in normpipe <
+0.4 and are kept as aliases.
+}
+

@@ -15,6 +15,10 @@
 #' @return Tibble with one column `br_<id>` per bridge block, `br_mean`
 #'   (mean over all bridge items) and `bi_<item>` (scored bridge item,
 #'   integer units).
+#' @section Lifecycle:
+#' Building block, exported for advanced use: it may change in a minor
+#' version, with an entry in NEWS.md. The pipeline functions that use it are
+#' stable.
 #' @export
 bridge_scores <- function(items_df, inst) {
   br <- inst$transfer$bridge
@@ -51,6 +55,10 @@ bridge_scores <- function(items_df, inst) {
 #' @param ref_scores Optional scores of the reference sample (for the range
 #'   of the numeric group variables).
 #' @return Tibble.
+#' @section Lifecycle:
+#' Building block, exported for advanced use: it may change in a minor
+#' version, with an entry in NEWS.md. The pipeline functions that use it are
+#' stable.
 #' @export
 transfer_donor_frame <- function(donors, inst, ref_scores = NULL) {
   dm <- as_tibble(donors$meta)
@@ -124,6 +132,10 @@ transfer_prediction_frame <- function(items, ref_scores, ref_ids, donor_frame, i
 #' @return List of class `normpipe_transfer_data` with `outcome`, `family`,
 #'   `data`, `formula` (brmsformula), `bfamily`, `prior`, `init` (function,
 #'   0 or `NULL` for random), `info` (observed items), `preds`, `spec`.
+#' @section Lifecycle:
+#' Building block, exported for advanced use: it may change in a minor
+#' version, with an entry in NEWS.md. The pipeline functions that use it are
+#' stable.
 #' @export
 transfer_data <- function(outcome, dat, inst, family = NULL,
                           spec = transfer_spec(inst, outcome), s = get_scale(inst, outcome)) {

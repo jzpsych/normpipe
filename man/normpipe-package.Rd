@@ -35,6 +35,26 @@ getting-started guide is `vignette("normpipe", package = "normpipe")`.
 * Export: [long_table_scale()], [export_compact()], [export_json()]
 * Driver and test data: [run_norming()], [migrate_output()],
   [simulate_reference()]
+* Measurement invariance (experimental): [run_invariance()]
+}
+
+\section{Stability}{
+
+From version 1.0.0 on, normpipe changes only by addition. The keys of the
+configuration file and their defaults, the stage names, the files of an
+output folder, their columns and the keys of the JSON file are kept, and
+tables are best read by column name. The same data, configuration and
+package versions give the same numbers: every random step runs with a
+seed of its own (`uncertainty: seed` sets another one) and leaves the
+random-number state of the session alone, and `run_info.json` records
+what a set of tables was computed with. A correction that changes results
+is listed in NEWS.md under "Changes to results"; the cache then recomputes
+what it affects.
+
+Every help page says in a section "Lifecycle" whether a function is
+stable, a building block (exported for advanced use, may change in a minor
+version), experimental (measurement invariance) or superseded (a name of
+an earlier version, kept as an alias).
 }
 
 \seealso{

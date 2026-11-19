@@ -4,7 +4,7 @@
 \alias{draw_model_params}
 \title{Draw item-parameter sets from the asymptotic distribution of a model}
 \usage{
-draw_model_params(model, n_draws, max_tries = 50)
+draw_model_params(model, n_draws, max_tries = 50, seed = NULL)
 }
 \arguments{
 \item{model}{An object of class `normpipe_model` ([fit_scale_model()]).}
@@ -13,6 +13,9 @@ draw_model_params(model, n_draws, max_tries = 50)
 
 \item{max_tries}{Maximum number of redraws per draw before the point
 estimates are used.}
+
+\item{seed}{Optional random seed; the random-number state of the caller is
+restored afterwards. Without it the current state is used.}
 }
 \value{
 List of `n_draws` models of class `normpipe_model`.
@@ -24,3 +27,10 @@ are rejected and redrawn. Equality constraints (mirt) are honoured by
 drawing the first member of a group and copying it. Without a usable
 covariance matrix the point estimates are returned for every draw.
 }
+\section{Lifecycle}{
+
+Building block, exported for advanced use: it may change in a minor
+version, with an entry in NEWS.md. The pipeline functions that use it are
+stable.
+}
+

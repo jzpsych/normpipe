@@ -65,6 +65,9 @@ wecdf_at <- function(score, weight, grid, convention = "midpoint") {
 #'   effective N of the respondents' weights, averaged over the draws) and
 #'   `n`. `norms_all_cells()`: list with
 #'   `cells` (all configured cells) and `overall`.
+#' @section Lifecycle:
+#' Stable since normpipe 1.0.0: the name, the arguments and the documented
+#' parts of the result are kept; later versions only add to them.
 #' @export
 weighted_norms <- function(fr, s, inst, cells = cell_vars(inst),
                            probs = inst$uncertainty$probs,
@@ -130,6 +133,11 @@ norms_all_cells <- function(fr, s, inst) {
 #' @return Tibble with the `by` variables, the continuous variable,
 #'   `half_width`, `n_eff_local`, `raw`, `pctl_med`, `pctl_lo`, `pctl_hi`,
 #'   `T`, `T_lo`, `T_hi`.
+#' @section Lifecycle:
+#' Stable since normpipe 1.0.0: the name, the arguments and the documented
+#' parts of the result are kept; later versions only add to them. The
+#' argument `ages` is the name of `values` in normpipe < 0.4 and is kept as
+#' an alias.
 #' @export
 weighted_norms_continuous <- function(fr, s, inst, values = inst$groups$continuous$values,
                                       probs = inst$uncertainty$probs,

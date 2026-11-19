@@ -21,6 +21,12 @@ name of every categorical group variable and `<variable>_group` for every
 banded one. `group_sources()` returns the columns of the reference data
 that the groups (and the continuous norms) are built from.
 }
+\section{Lifecycle}{
+
+Stable since normpipe 1.0.0: the name, the arguments and the documented
+parts of the result are kept; later versions only add to them.
+}
+
 \examples{
 inst <- read_instrument(system.file("instruments/demo7/demo7.yml",
                                     package = "normpipe"))

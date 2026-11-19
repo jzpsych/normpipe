@@ -29,6 +29,10 @@ transfer_backend <- function(inst) {
 #' @param ... Further arguments passed to [brms::brm()] (e.g. `seed`,
 #'   `refresh`, `chains`, `iter`, `cores`).
 #' @return A `brmsfit`.
+#' @section Lifecycle:
+#' `fit_transfer()` is stable since normpipe 1.0.0. `transfer_model()` is a
+#' building block, exported for advanced use: it may change in a minor
+#' version, with an entry in NEWS.md.
 #' @export
 transfer_model <- function(td, backend = "rstan", file = NULL, ...) {
   if (!requireNamespace("brms", quietly = TRUE)) stop("brms is not installed.")
@@ -71,6 +75,10 @@ transfer_model <- function(td, backend = "rstan", file = NULL, ...) {
 #' @param backend Stan backend.
 #' @param ... Further arguments passed to [brms::brm_multiple()].
 #' @return A `brmsfit` with pooled chains.
+#' @section Lifecycle:
+#' Building block, exported for advanced use: it may change in a minor
+#' version, with an entry in NEWS.md. The pipeline functions that use it are
+#' stable.
 #' @export
 transfer_model_multiple <- function(tds, backend = "rstan", ...) {
   if (!requireNamespace("brms", quietly = TRUE)) stop("brms is not installed.")
@@ -198,6 +206,9 @@ phi_plateau <- function(fit) {
 #'   phi > 1e10; their elpd is not interpretable), `pareto_k_bad`
 #'   (observations with k > 0.7), `eligible`, `chosen`, `elpd_diff` and
 #'   `se_diff` (to the chosen).
+#' @section Lifecycle:
+#' Stable since normpipe 1.0.0: the name, the arguments and the documented
+#' parts of the result are kept; later versions only add to them.
 #' @export
 select_transfer_family <- function(fits, rhat_max = 1.01, rhat_chain = 1.05) {
   if (!requireNamespace("brms", quietly = TRUE)) stop("brms is not installed.")

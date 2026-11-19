@@ -83,3 +83,9 @@ With `incomplete = "drop"` (default) they are dropped; with
 ratio of raked to design weights, and enter the norms of every table that
 does not condition on the missing variable (e.g. the overall norms).
 }
+\section{Lifecycle}{
+
+Stable since normpipe 1.0.0: the name, the arguments and the documented
+parts of the result are kept; later versions only add to them.
+}
+

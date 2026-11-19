@@ -45,3 +45,9 @@ Runs [invariance_sequence()] (configural, scalar, strict) for one
 unidimensional model per scale, e.g. for every facet of the full
 instrument in the donor samples.
 }
+\section{Lifecycle}{
+
+Experimental: the decision rules, arguments and results may change in a
+minor version, with an entry in NEWS.md.
+}
+

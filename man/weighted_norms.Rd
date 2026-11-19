@@ -59,3 +59,9 @@ Two percentile conventions are available (`uncertainty$pctl_convention`):
 percentile rank, whose mean over the norm sample is exactly 50; and
 `"cumulative"`, PR = P(X <= x), the relative cumulative frequency.
 }
+\section{Lifecycle}{
+
+Stable since normpipe 1.0.0: the name, the arguments and the documented
+parts of the result are kept; later versions only add to them.
+}
+

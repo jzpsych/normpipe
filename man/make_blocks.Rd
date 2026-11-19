@@ -29,3 +29,10 @@ GRM scale, one block per specific factor for a bifactor scale, one block
 per component model for a composite scale. It is the input of
 [conditional_tables()] and [integrated_intervals()].
 }
+\section{Lifecycle}{
+
+Building block, exported for advanced use: it may change in a minor
+version, with an entry in NEWS.md. The pipeline functions that use it are
+stable.
+}
+

@@ -1,0 +1,10 @@
+cff-version: 1.2.0
+message: "To cite normpipe, cite the version you used."
+type: software
+title: "normpipe: Population-Referenced Norms with Two Layers of Uncertainty for Any Questionnaire"
+version: 1.0.0
+license: GPL-3.0-only
+repository-code: "https://github.com/jzpsych/normpipe"
+authors:
+  - family-names: Zimmermann
+    given-names: Johannes

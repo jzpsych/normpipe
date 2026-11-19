@@ -38,7 +38,8 @@ the transformation to the norm scale.}
 \value{
 `weighted_norms()`: tibble with the cell variables, `raw`,
   `pctl_med`, `pctl_lo`, `pctl_hi`, `T`, `T_lo`, `T_hi`, `n_eff` (Kish
-  effective N of the point frame) and `n`. `norms_all_cells()`: list with
+  effective N of the respondents' weights, averaged over the draws) and
+  `n`. `norms_all_cells()`: list with
   `cells` (all configured cells) and `overall`.
 }
 \description{

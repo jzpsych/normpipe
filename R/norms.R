@@ -62,7 +62,8 @@ wecdf_at <- function(score, weight, grid, convention = "midpoint") {
 #' @param convention `"midpoint"` or `"cumulative"` (see Details).
 #' @return `weighted_norms()`: tibble with the cell variables, `raw`,
 #'   `pctl_med`, `pctl_lo`, `pctl_hi`, `T`, `T_lo`, `T_hi`, `n_eff` (Kish
-#'   effective N of the point frame) and `n`. `norms_all_cells()`: list with
+#'   effective N of the respondents' weights, averaged over the draws) and
+#'   `n`. `norms_all_cells()`: list with
 #'   `cells` (all configured cells) and `overall`.
 #' @export
 weighted_norms <- function(fr, s, inst, cells = cell_vars(inst),
@@ -77,9 +78,12 @@ weighted_norms <- function(fr, s, inst, cells = cell_vars(inst),
   fr <- fr[in_groups(fr, inst, cells), , drop = FALSE]
   if (!length(cells)) fr$.cell <- "overall"
   grp <- if (length(cells)) cells else ".cell"
-  neff <- fr %>% filter(.data$.draw == min(.data$.draw), .data$shape >= 1) %>%
-    group_by(across(all_of(grp))) %>%
-    summarise(n_eff = sum(.data$weight)^2 / sum(.data$weight^2), n = n(), .groups = "drop")
+  # effective N of a cell: every draw of a draw frame carries bootstrap
+  # weights, so the weights of a person are averaged over the draws first
+  neff <- fr %>% filter(.data$shape >= 1) %>%
+    group_by(across(all_of(grp)), .data$id) %>%
+    summarise(w = mean(.data$weight), .groups = "drop_last") %>%
+    summarise(n_eff = sum(.data$w)^2 / sum(.data$w^2), n = n(), .groups = "drop")
   out <- fr %>%
     group_by(across(all_of(grp)), .data$.draw) %>%
     reframe(raw = grid, pctl = wecdf_at(.data$score, .data$weight, grid, convention)) %>%

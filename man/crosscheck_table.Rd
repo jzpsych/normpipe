@@ -25,3 +25,9 @@ when the same scale is projected through the transfer module without its
 own bridge items (`transfer$crosscheck`). [run_norming()] writes the
 result of all cross-check outcomes to `transfer_crosscheck.csv`.
 }
+\section{Lifecycle}{
+
+Stable since normpipe 1.0.0: the name, the arguments and the documented
+parts of the result are kept; later versions only add to them.
+}
+

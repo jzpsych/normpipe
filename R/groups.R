@@ -100,6 +100,9 @@ build_groups <- function(groups = NULL, cells = NULL) {
 #'                                     package = "normpipe"))
 #' cell_vars(inst)
 #' group_sources(inst)
+#' @section Lifecycle:
+#' Stable since normpipe 1.0.0: the name, the arguments and the documented
+#' parts of the result are kept; later versions only add to them.
 #' @export
 cell_vars <- function(inst) unname(map_chr(inst$groups$vars, "col"))
 
@@ -141,6 +144,11 @@ band_levels <- function(v) levels(cut(v$breaks[1], v$breaks, right = FALSE))
 #' @return `d` with a factor column `<variable>_group` (bands closed on the
 #'   left, as configured in `groups$by`) for every banded variable that is
 #'   in `d`; existing band columns are kept.
+#' @section Lifecycle:
+#' `add_groups()` is stable since normpipe 1.0.0: the name, the arguments
+#' and the documented parts of the result are kept; later versions only add
+#' to them. `add_age_group()` is superseded: it is the name of this function
+#' in normpipe < 0.4 and is kept as an alias.
 #' @export
 add_groups <- function(d, inst) {
   for (v in inst$groups$vars) {

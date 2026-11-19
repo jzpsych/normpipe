@@ -94,6 +94,9 @@ transfer_spec_defaults <- function(inst = NULL) {
 #'   `prior_b_disc`,
 #'   `priors` (further priors as `{prior, class, dpar, coef}`), `init`
 #'   (`NULL` = family default, `"random"` or 0) and `exclude`.
+#' @section Lifecycle:
+#' Stable since normpipe 1.0.0: the name, the arguments and the documented
+#' parts of the result are kept; later versions only add to them.
 #' @export
 transfer_spec <- function(inst, outcome) {
   tr <- inst$transfer %||% list()
@@ -128,17 +131,18 @@ transfer_spec <- function(inst, outcome) {
 
 #' Check the keys of the transfer block
 #'
-#' Unknown keys at the top of `transfer` are reported as a warning (a typo
-#' would otherwise silently fall back to the default); unknown keys under
-#' `transfer$outcomes` are an error in [transfer_spec()].
+#' Unknown keys of `transfer` and of its bridge blocks are reported like
+#' every unknown key (check_keys()); unknown keys under `transfer$outcomes`
+#' are an error in [transfer_spec()]. Run by read_instrument() and again by
+#' the transfer stage.
 #' @noRd
 check_transfer_config <- function(inst) {
   tr <- inst$transfer %||% list()
   known <- c(names(transfer_spec_defaults()), "enabled", "bridge", "reference_level",
              "projection_level", "bootstrap_weights", "exclude", "crosscheck", "outcomes",
              "n_draws", "backend")
-  bad <- setdiff(names(tr), known)
-  if (length(bad)) warning("Unknown key(s) in transfer: ", paste(bad, collapse = ", "), call. = FALSE)
+  check_keys(tr, known, "`transfer`")
+  for (b in tr$bridge) check_keys(b, c("id", "items"), "a block of `transfer$bridge`")
   for (o in names(tr$outcomes)) transfer_spec(inst, o)
   invisible(TRUE)
 }

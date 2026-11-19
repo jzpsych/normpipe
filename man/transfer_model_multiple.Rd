@@ -31,3 +31,10 @@ pointwise log-likelihood of each chain is evaluated on its own data set;
 the resulting PSIS-LOO object is stored in `fit$normpipe_loo` and used by
 [select_transfer_family()].
 }
+\section{Lifecycle}{
+
+Building block, exported for advanced use: it may change in a minor
+version, with an entry in NEWS.md. The pipeline functions that use it are
+stable.
+}
+

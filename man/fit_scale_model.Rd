@@ -62,3 +62,9 @@ engine fits the same models by penalised marginal maximum likelihood
 (Gauss-Hermite quadrature, weak normal penalties on log slopes and
 intercepts); it needs no further package but is slow for long scales.
 }
+\section{Lifecycle}{
+
+Stable since normpipe 1.0.0: the name, the arguments and the documented
+parts of the result are kept; later versions only add to them.
+}
+

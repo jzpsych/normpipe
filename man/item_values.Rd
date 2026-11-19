@@ -21,3 +21,10 @@ Tibble of item values in integer units (multiply by
 \description{
 Item values from category indices
 }
+\section{Lifecycle}{
+
+Building block, exported for advanced use: it may change in a minor
+version, with an entry in NEWS.md. The pipeline functions that use it are
+stable.
+}
+

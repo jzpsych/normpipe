@@ -48,3 +48,9 @@ Posterior predictive draws of the unobserved part of the outcome for every
 reference respondent, plus the respondent's observed part, snapped to the
 attainable scores. The result is the draw frame of the outcome.
 }
+\section{Lifecycle}{
+
+Stable since normpipe 1.0.0: the name, the arguments and the documented
+parts of the result are kept; later versions only add to them.
+}
+

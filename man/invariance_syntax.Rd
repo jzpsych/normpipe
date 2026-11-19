@@ -47,3 +47,9 @@ Thresholds and loadings are free in the configural model
   intercepts are 0 throughout. Items with two categories keep a residual
   variance of 1 in every group.
 }
+\section{Lifecycle}{
+
+Experimental: the decision rules, arguments and results may change in a
+minor version, with an entry in NEWS.md.
+}
+

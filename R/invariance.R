@@ -50,6 +50,9 @@
 #' inst <- read_instrument(system.file("instruments/demo7/demo7.yml",
 #'                                     package = "normpipe"))
 #' invariance_structure(inst, c("full_a", "full_b"))
+#' @section Lifecycle:
+#' Experimental: the decision rules, arguments and results may change in a
+#' minor version, with an entry in NEWS.md.
 #' @export
 invariance_structure <- function(inst, scales = NULL) {
   first <- list(); second <- list()
@@ -107,6 +110,9 @@ invariance_structure <- function(inst, scales = NULL) {
 #'   intercepts are 0 throughout. Items with two categories keep a residual
 #'   variance of 1 in every group.
 #' @return The model syntax (one string).
+#' @section Lifecycle:
+#' Experimental: the decision rules, arguments and results may change in a
+#' minor version, with an entry in NEWS.md.
 #' @export
 invariance_syntax <- function(structure, nthr, n_groups,
                               level = c("configural", "scalar", "strict", "second_order"),
@@ -226,6 +232,9 @@ collapse_sparse <- function(x, g, min_n) {
 #' @references Chen, F. F. (2007). Sensitivity of goodness of fit indexes to
 #'   lack of measurement invariance. *Structural Equation Modeling, 14*(3),
 #'   464-504.
+#' @section Lifecycle:
+#' Experimental: the decision rules, arguments and results may change in a
+#' minor version, with an entry in NEWS.md.
 #' @export
 invariance_flags <- function(tab, cfi = 0.010, rmsea = 0.015, srmr = 0.010) {
   ref <- match(tab$compared_with, tab$model)
@@ -279,6 +288,9 @@ invariance_flags <- function(tab, cfi = 0.010, rmsea = 0.015, srmr = 0.010) {
 #' ref <- simulate_reference(inst, N = 1500)
 #' invariance_sequence(ref$items, ref$meta$gender, inst, label = "gender")
 #' }
+#' @section Lifecycle:
+#' Experimental: the decision rules, arguments and results may change in a
+#' minor version, with an entry in NEWS.md.
 #' @export
 invariance_sequence <- function(items, group, inst, structure = invariance_structure(inst),
                                 levels = c("configural", "scalar", "strict", "second_order"),
@@ -335,6 +347,9 @@ invariance_sequence <- function(items, group, inst, structure = invariance_struc
 #'   the first version.
 #' @return Tibble as returned by [invariance_sequence()], with the additional
 #'   column `outcome`.
+#' @section Lifecycle:
+#' Experimental: the decision rules, arguments and results may change in a
+#' minor version, with an entry in NEWS.md.
 #' @export
 invariance_screen <- function(items, group, inst, scales = NULL,
                               missing = c("pairwise", "listwise"), min_cat_n = 10,
@@ -382,6 +397,9 @@ invariance_screen <- function(items, group, inst, scales = NULL,
 #' @param reference_label Name of the reference sample in the sample grouping.
 #' @return List with `fit`, `screen` and `decision` (see
 #'   [invariance_decision()]), invisibly.
+#' @section Lifecycle:
+#' Experimental: the decision rules, arguments and results may change in a
+#' minor version, with an entry in NEWS.md.
 #' @export
 run_invariance <- function(reference, donors = NULL, inst, out_dir = NULL,
                            structure = invariance_structure(inst), screen_scales = NULL,
@@ -454,6 +472,9 @@ run_invariance <- function(reference, donors = NULL, inst, out_dir = NULL,
 #'   is not flagged in any grouping and every configural and scalar model
 #'   could be evaluated), `flagged` (the flagged rows of `fit` and `screen`)
 #'   and `text` (the summary written to `invariance_decision.txt`).
+#' @section Lifecycle:
+#' Experimental: the decision rules, arguments and results may change in a
+#' minor version, with an entry in NEWS.md.
 #' @export
 invariance_decision <- function(fit, screen = NULL) {
   main <- fit[fit$model %in% c("scalar", "strict"), ]

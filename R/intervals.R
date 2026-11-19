@@ -104,11 +104,17 @@ norm_table_of_cell <- function(nm, key, inst) {
 #' distribution pooled over its draws, and the norm table that maps the
 #' posterior onto the norm scale is computed from every draw in turn, so
 #' that the mixture has one component per draw of the frame and carries the
-#' full variability of the norm values. (Up to normpipe 0.4.0 the norm table
-#' was computed from the pooled draws of a set as well, which averaged most
-#' of that variability out.)
+#' full variability of the norm values.
 #' The resulting intervals contain both measurement error and the
 #' uncertainty of the norms.
+#'
+#' For a graded response scale the posterior per summed score is computed
+#' exactly. For scales with several blocks (bifactor and composite models)
+#' the posterior of the true score is a Monte Carlo approximation with
+#' `n_mc` draws per summed score (`uncertainty$n_mc`, default 1500; pass it
+#' through `...`). [run_norming()] runs both functions with a fixed seed per
+#' scale, so that their results are reproducible; called directly, they use
+#' the current random-number state.
 #'
 #' `marginal_reliability()` returns the marginal reliability of the summed
 #' score in the reference population from the overall conditional table.
@@ -131,6 +137,9 @@ norm_table_of_cell <- function(nm, key, inst) {
 #'   `theta_lo`, `theta_hi`, `tau_eap`, `tau_sd`, `p_marg`, `T_eap`, `T_lo`,
 #'   `T_hi`. `integrated_intervals()`: the same list structure with
 #'   `sum_score`, `raw`, `T_eap`, `T_lo`, `T_hi`.
+#' @section Lifecycle:
+#' Stable since normpipe 1.0.0: the name, the arguments and the documented
+#' parts of the result are kept; later versions only add to them.
 #' @export
 conditional_tables <- function(blocks, s, fr, nm, inst, sum_scores = NULL,
                                probs = inst$uncertainty$probs, ...) {

@@ -49,3 +49,10 @@ model treats the same sum as an ordinal outcome (`y_ord` = sum + 1, one
 threshold per attainable value). The projection ([project_outcome()]) adds
 the observed part again.
 }
+\section{Lifecycle}{
+
+Building block, exported for advanced use: it may change in a minor
+version, with an entry in NEWS.md. The pipeline functions that use it are
+stable.
+}
+

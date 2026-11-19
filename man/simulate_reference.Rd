@@ -18,7 +18,8 @@ simulate_reference(
 
 \item{N}{Number of respondents.}
 
-\item{seed}{Random seed.}
+\item{seed}{Random seed. The random-number state of the caller is
+restored afterwards.}
 
 \item{general}{Loading of every trait on the shared general factor.}
 
@@ -42,6 +43,12 @@ the norm groups when the instrument uses these variables), and uniformly
 drawn values of every other variable of the norm groups. Intended for
 tests, examples and simulation checks.
 }
+\section{Lifecycle}{
+
+Stable since normpipe 1.0.0: the name, the arguments and the documented
+parts of the result are kept; later versions only add to them.
+}
+
 \examples{
 inst <- read_instrument(system.file("instruments/demo7/demo7.yml",
                                     package = "normpipe"))

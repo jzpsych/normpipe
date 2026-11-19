@@ -27,6 +27,12 @@ Tibble with one column per outcome (`<version>_<scale>`) on the raw
 \description{
 Score every scale of every version
 }
+\section{Lifecycle}{
+
+Stable since normpipe 1.0.0: the name, the arguments and the documented
+parts of the result are kept; later versions only add to them.
+}
+
 \examples{
 inst <- read_instrument(system.file("instruments/demo7/demo7.yml",
                                     package = "normpipe"))

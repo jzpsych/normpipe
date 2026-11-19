@@ -27,6 +27,12 @@ Collects the first-order factors (blocks of items) and, where the
 instrument defines scales from such blocks, the second-order factors above
 them.
 }
+\section{Lifecycle}{
+
+Experimental: the decision rules, arguments and results may change in a
+minor version, with an entry in NEWS.md.
+}
+
 \examples{
 inst <- read_instrument(system.file("instruments/demo7/demo7.yml",
                                     package = "normpipe"))

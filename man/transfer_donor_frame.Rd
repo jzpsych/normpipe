@@ -25,3 +25,10 @@ variables are factors whose levels follow the configured groups. With
 `ref_scores`, donors outside the range of the reference sample on a
 numeric group variable (e.g. age) are dropped.
 }
+\section{Lifecycle}{
+
+Building block, exported for advanced use: it may change in a minor
+version, with an entry in NEWS.md. The pipeline functions that use it are
+stable.
+}
+

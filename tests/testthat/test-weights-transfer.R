@@ -295,7 +295,7 @@ test_that("prediction_frames build the frames from the reference data and the fi
 test_that("unknown transfer keys are reported", {
   inst <- demo_transfer()
   inst$transfer$adapt_detla <- 0.99
-  expect_warning(check_transfer_config(inst), "adapt_detla")
+  expect_error(check_transfer_config(inst), "adapt_detla")
   inst$transfer$adapt_detla <- NULL
   expect_silent(check_transfer_config(inst))
 })

@@ -8,7 +8,15 @@
 \usage{
 cache_key(...)
 
-cache_get(out_dir, name, key, compute, say = NULL)
+cache_get(
+  out_dir,
+  name,
+  key,
+  compute,
+  say = NULL,
+  legacy_key = NULL,
+  accept = NULL
+)
 
 cache_status(out_dir)
 }
@@ -25,6 +33,13 @@ cache_status(out_dir)
 \item{compute}{Function without arguments that computes the result.}
 
 \item{say}{Function for progress messages (default: none).}
+
+\item{legacy_key}{Optional key of the same result under the key format of
+an earlier version of the package. A result recorded under it is taken
+over without recomputation and recorded under `key`.}
+
+\item{accept}{Optional function of the cached result that returns `TRUE`
+when it can be used, or a reason (string) why it has to be recomputed.}
 }
 \value{
 `cache_key()`: a string. `cache_get()`: the result.
@@ -47,6 +62,15 @@ An outdated file is not deleted but moved to `cache/superseded/`.
 cached result for a key or computes and stores it. `cache_status()` lists
 the manifest of an output folder.
 }
+\section{Lifecycle}{
+
+`cache_status()` is stable since normpipe 1.0.0. `cache_key()` and
+`cache_get()` are building blocks, exported for advanced use: they may
+change in a minor version, with an entry in NEWS.md. The layout of the
+folder `cache/` is not part of the stable interface; an earlier layout is
+taken over by the package.
+}
+
 \examples{
 out <- file.path(tempdir(), "np-cache")
 k <- cache_key(1:3, "a")

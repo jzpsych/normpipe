@@ -65,7 +65,9 @@
 #'   (one draw with the original weights).
 #' @param prior_mass Effective number of pseudo-observations per reporting
 #'   cell; 0 switches the prior off.
-#' @param seed Random seed; derived from the scale name when `NULL`.
+#' @param seed Random seed; derived from the scale name when `NULL` (and
+#'   from `uncertainty$seed` of the instrument when that is set). The
+#'   random-number state of the caller is restored afterwards.
 #' @param scores_imp Optional matrix of scores from completed data sets
 #'   ([impute_items()]), one row per row of `ref` and one column per
 #'   imputation. Draw `r` then uses column `((r - 1) mod M) + 1` instead of
@@ -78,6 +80,9 @@
 #' freq <- data.frame(score = 0:24, count = round(100 * dbinom(0:24, 24, 0.3)))
 #' fr <- frequency_frame(freq, s, inst, n_boot = 20)
 #' head(weighted_norms(fr, s, inst, cells = character(0)))
+#' @section Lifecycle:
+#' Stable since normpipe 1.0.0: the name, the arguments and the documented
+#' parts of the result are kept; later versions only add to them.
 #' @export
 direct_frame <- function(ref, s, inst, n_boot = 0L,
                          prior_mass = inst$uncertainty$prior_mass,
@@ -97,7 +102,7 @@ direct_frame <- function(ref, s, inst, n_boot = 0L,
   obs <- add_groups(obs, inst)
   n_person <- nrow(obs)
   if (prior_mass > 0) obs <- bind_rows(obs, prior_rows(obs, s, inst, prior_mass))
-  fr <- bootstrap_frame(obs, n_boot, seed %||% sum(utf8ToInt(paste0("direct_", s$version, "_", s$id))))
+  fr <- bootstrap_frame(obs, n_boot, seed %||% step_seed(inst, paste0("direct_", s$version, "_", s$id), legacy = TRUE))
   if (!is.null(scores_imp)) {
     # draw r takes the scores of completed data set ((r - 1) mod M) + 1
     pos <- (seq_len(nrow(fr)) - 1L) %% nrow(obs) + 1L
@@ -133,7 +138,7 @@ frequency_frame <- function(freq, s, inst, n_boot = 0L,
   obs <- add_groups(obs, inst)
   obs <- obs[obs$weight > 0, ]
   if (prior_mass > 0) obs <- bind_rows(obs, prior_rows(obs, s, inst, prior_mass))
-  bootstrap_frame(obs, n_boot, seed %||% sum(utf8ToInt(paste0("freq_", s$version, "_", s$id))))
+  bootstrap_frame(obs, n_boot, seed %||% step_seed(inst, paste0("freq_", s$version, "_", s$id), legacy = TRUE))
 }
 
 #' Pseudo-observations of the Dirichlet prior
@@ -184,11 +189,10 @@ prior_rows <- function(obs, s, inst, prior_mass) {
 #' @noRd
 bootstrap_frame <- function(obs, n_boot, seed) {
   if (n_boot < 1L) return(mutate(obs, .draw = 1L))
-  set.seed(seed)
-  map_dfr(seq_len(n_boot), \(r) {
+  with_seed(seed, map_dfr(seq_len(n_boot), \(r) {
     g <- rgamma(nrow(obs), shape = obs$shape)
     mutate(obs, weight = .data$weight / .data$shape * g, .draw = r)
-  })
+  }))
 }
 
 #' Compact on-disk form of a frame (person rows once + score/weight matrices)

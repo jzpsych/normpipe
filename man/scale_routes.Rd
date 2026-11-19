@@ -20,3 +20,9 @@ A scale is normed directly when the reference sample answered all of its
 items, otherwise it needs the transfer module. The scale key `observed`
 (`true`/`false`) overrides this decision.
 }
+\section{Lifecycle}{
+
+Stable since normpipe 1.0.0: the name, the arguments and the documented
+parts of the result are kept; later versions only add to them.
+}
+

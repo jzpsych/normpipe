@@ -15,6 +15,15 @@ Everything that is specific to an instrument is described in one YAML file,
 read with `read_instrument()`. This vignette lists every key. Defaults are
 given in brackets; keys without a default are required.
 
+The keys and their defaults are part of the stable interface of the
+package: later versions add keys but do not remove or reinterpret them, and
+a configuration without a new key gives the same results as before. A key
+the package does not know is an error, because a typo (or a key of a later
+version) would otherwise fall back to a default without notice; the message
+names the closest known key. `options(normpipe.unknown_keys = "warn")`
+turns the error into a warning. Scale entries are the exception: further
+keys of a scale are kept as metadata (see `versions`).
+
 A complete small example is `inst/instruments/demo7/demo7.yml`:
 
 ```{r, echo = FALSE, comment = ""}
@@ -38,6 +47,9 @@ cat(readLines(system.file("instruments/demo7/demo7.yml", package = "normpipe")),
 | `transfer` | optional transfer module (below) |
 | `weighting` | raking of the reference weights (below) |
 | `missing` | handling of skipped items (below) |
+| `reference`, `donors` | free descriptions of the data sources (not used in the computation) |
+| `notes` | free text or any structure, kept in the instrument object (not used in the computation) |
+| `requires` | the version of normpipe the file needs at least, e.g. `"1.1"`; an older version stops with a message instead of ignoring a newer key |
 
 YAML 1.1 reads the bare keys `n`, `y`, `no`, `yes`, `off`, `on` as booleans,
 so the number of items is given as `n_items`, not `n`.
@@ -79,6 +91,11 @@ Outcomes are named `<version id>_<scale id>`.
 | `equal_block_slopes` | `true`: specific slopes are constrained equal within each block of a bifactor model (needed for two-item blocks) |
 | `min_answered` | proportion of the items that must be answered for a prorated score [1] |
 | `observed` | `true`/`false` forces the direct or the transfer route; otherwise the route follows from the items present in the reference data |
+
+Further keys of a scale (e.g. `description` or a label in another
+language) are kept as metadata in `get_scale(inst, outcome)$extra` and do
+not enter the computation; a key that differs from a known one by a typo
+gives a warning.
 
 The attainable raw scores follow from the item values by convolution. A
 `mean_of_means` scale whose components differ in length (or in their value
@@ -177,6 +194,25 @@ documentation; with another scale, read the name of that scale instead.
 | `probs` | lower and upper quantile of bands and intervals [`[0.025, 0.975]`] |
 | `pctl_clamp` | percentile ranks are clamped to `[pctl_clamp, 1 - pctl_clamp]` before the transformation to the norm scale [1e-4] |
 | `pctl_convention` | `midpoint` or `cumulative` [`midpoint`] |
+| `n_mc` | Monte Carlo draws per summed score for the intervals of bifactor and composite scales [1500] |
+| `seed` | a number from which the seeds of all random steps are derived [none: every step has a fixed seed of its own] |
+| `n_draws` | accepted for compatibility; the number of posterior predictive draws of a transfer scale is `transfer$n_draws` [500] |
+
+Every random step of the pipeline (bootstrap draws, imputation, projection
+and fit of a transfer model, item-parameter draws, Monte Carlo of the
+intervals) runs with a seed of its own, derived from the names of the step
+and the scale, and leaves the random-number state of the session
+unchanged. A result therefore does not depend on what ran before it or on
+which results came from the cache. `seed` derives other seeds for all
+steps, e.g. to check how much the results depend on the Monte Carlo draws;
+it recomputes every random step, transfer fits included.
+
+The Monte Carlo error of the intervals of bifactor and composite scales
+shrinks with `n_mc` (at the default, a few tenths of a T point in the middle
+of the range and more at the extremes); for final tables, a larger value
+such as 10000 is worth its computing time. `n_boot` plays the same role for
+the norm bands: the default of 200 is meant for trying out a configuration,
+final norms should use 1000 or more.
 
 Percentile conventions:
 
@@ -193,6 +229,11 @@ The standard score is mean + sd · Φ⁻¹(PR) in both cases (T = 50 + 10 Φ⁻�
 | Key | Meaning |
 |---|---|
 | `engine` | `auto` (mirt when installed, otherwise the built-in estimator), `mirt`, or `internal` [`auto`] |
+| `source`, `calibration` | accepted for compatibility, not used [`fit`, `reference`] |
+
+A cached item model is used again only if it was fitted with the engine
+that would fit it now; installing mirt, for example, refits models that the
+built-in estimator fitted under `engine: auto`.
 
 The item models are calibrated in the reference sample unless
 `run_norming()` gets a separate calibration sample (`calib`) or pre-fitted

@@ -1,0 +1,13 @@
+citHeader("To cite normpipe in publications, cite the version you used:")
+
+bibentry(
+  bibtype = "Manual",
+  title = "normpipe: Population-Referenced Norms with Two Layers of Uncertainty for Any Questionnaire",
+  author = person("Johannes", "Zimmermann"),
+  year = "2026",
+  note = paste("R package version", meta$Version),
+  url = "https://github.com/jzpsych/normpipe",
+  textVersion = paste0("Zimmermann, J. (2026). normpipe: Population-referenced norms with two ",
+                       "layers of uncertainty for any questionnaire (R package version ",
+                       meta$Version, "). https://github.com/jzpsych/normpipe")
+)

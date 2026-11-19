@@ -45,7 +45,11 @@ run_stage(ctx, stage)
 \item{ref}{Reference sample: `list(meta, items)`. `meta` has `id`, the
 variables of the norm groups ([group_sources()], e.g. `age` and
 `gender`) and optionally `weight` (unit weights otherwise); `items` holds
-the item columns named `<prefix><item>`, in the same row order as `meta`.}
+the item columns named `<prefix><item>`, either in the same row order
+as `meta` or with a column `id` by which its rows are matched to
+`meta$id`. The ids of `meta` must be unique; a sample whose parts do not
+fit together (different numbers of rows, ids that do not match) is an
+error.}
 
 \item{out_dir}{Output folder: result tables, and the cache in `cache/`.}
 
@@ -53,7 +57,7 @@ the item columns named `<prefix><item>`, in the same row order as `meta`.}
 [frequency_frame()]); these outcomes take the frequency route.}
 
 \item{calib}{Optional calibration sample `list(meta, items)` for stage
-`calibrate`; default `ref`.}
+`calibrate` (`meta` may be left out); default `ref`.}
 
 \item{margins}{Optional population margins for raking: a margin data
 frame ([make_margins()]) or a list of margin data frames
@@ -65,7 +69,9 @@ instrument.}
 ([fit_scale_model()]); they take precedence over stage `calibrate`.}
 
 \item{donors}{Donor samples for the transfer module: `list(meta, items)`
-with a column `meta$sample` naming the sample.}
+with a column `meta$sample` naming the sample, the rows of `items` in the
+order of `meta` (or matched by an `id` column when `meta$id` is
+unique).}
 
 \item{stages}{Stages to run (see Details); they are run in the order of
 the pipeline. The stage names of normpipe < 0.4 (`P0`, `M1`, `M2`,
@@ -141,6 +147,15 @@ the outdated file is moved to `out_dir/cache/superseded/`. Changing, say, the
 number of bootstrap draws therefore recomputes the frames and norm tables
 but neither the item models nor the transfer fits.
 }
+\section{Lifecycle}{
+
+Stable since normpipe 1.0.0: the name, the arguments, the stages and the
+files written are kept; later versions only add to them. Of the context
+returned by `norming_context()`, only `ctx$long` is part of the stable
+interface. The stage names of normpipe < 0.4 and the argument
+`portal_citation` are superseded and kept as aliases.
+}
+
 \examples{
 \dontrun{
 inst <- read_instrument(system.file("instruments/demo7/demo7.yml",

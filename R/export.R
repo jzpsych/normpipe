@@ -11,7 +11,13 @@
 #
 # The standard-score columns carry the name of the norm scale of the
 # instrument; they are written here for the default, T.
+#
+# Files, columns and JSON keys are only ever added to, never renamed or
+# removed; readers should address columns and keys by name. FORMAT_VERSION
+# is written into the JSON file and into run_info.json.
 # ==============================================================================
+
+FORMAT_VERSION <- 1L
 
 #' Export formats
 #'
@@ -24,15 +30,17 @@
 #'
 #' `export_compact()` writes compact per-version tables for scoring
 #' software: `norms_<version>.csv` (raw score, standard score, integrated
-#' interval, percentile rank, extrapolation flag; the cell variables are
-#' `"all"` in the overall table) and, with continuous norms,
+#' interval, percentile rank, extrapolation flag, summed score; the cell
+#' variables are `"all"` in the overall table) and, with continuous norms,
 #' `norms_<version>_continuous.rds`. Scores are rounded to the `digits` of
 #' the norm scale.
 #'
 #' `export_json()` writes one JSON norm file per instrument for web
 #' applications: one source per version, the reporting cells as groups, and
 #' per row raw score, cell, standard score and interval limits. Keys and
-#' labels are English or German (`export$language` of the instrument).
+#' labels are English or German (`export$language` of the instrument);
+#' `normpipe_version` and `format_version` (version of the output format)
+#' are English in both.
 #'
 #' `export_platform_tables()` and `export_portal_json()` are the names of
 #' these two functions in normpipe < 0.4 and are kept as aliases.
@@ -49,7 +57,19 @@
 #' @return `long_table_scale()`: tibble with `version`, `scale`, `level`,
 #'   `route`, `cell`, the cell variables, `raw`, `pctl_med`, `pctl_lo`,
 #'   `pctl_hi`, `T`, `T_lo`, `T_hi`, `T_cond_lo`, `T_cond_hi`, `T_int_lo`,
-#'   `T_int_hi`, `extrapolation`, `n_eff`.
+#'   `T_int_hi`, `extrapolation`, `n_eff`, `sum_score`. `sum_score` is the
+#'   raw score as a whole number: the sum of the item values in units of
+#'   `items$unit` (with the default unit 1, the sum of the item values), so
+#'   that tables can be matched without comparing decimal fractions such as
+#'   1.3333; it is empty for scales tabulated on a reporting grid
+#'   (`mean_of_means` with components of unequal length).
+#' @section Lifecycle:
+#' `long_table_scale()`, `export_compact()` and `export_json()` are stable
+#' since normpipe 1.0.0: the name, the arguments and the documented parts of
+#' the result are kept; columns and keys are only added, never renamed or
+#' removed. `export_platform_tables()` and `export_portal_json()` are
+#' superseded: they are the names of the two export functions in normpipe <
+#' 0.4 and are kept as aliases.
 #' @export
 long_table_scale <- function(nm, cond, intg, s, inst, route = "direct") {
   nm <- norm_internal(nm, inst); cond <- norm_internal(cond, inst); intg <- norm_internal(intg, inst)
@@ -82,7 +102,16 @@ long_table_scale <- function(nm, cond, intg, s, inst, route = "direct") {
                           "pctl_med", "pctl_lo", "pctl_hi", "T", "T_lo", "T_hi",
                           "T_cond_lo", "T_cond_hi", "T_int_lo", "T_int_hi",
                           "extrapolation", "n_eff"))) %>%
+    mutate(sum_score = sum_score_of(.data$raw, s)) %>%
     norm_public(inst)
+}
+
+#' Raw scores as whole numbers: summed item values in integer units (NA on a
+#' reporting grid, where raw scores are not sums)
+#' @noRd
+sum_score_of <- function(raw, s) {
+  if (isTRUE(s$dense)) return(rep(NA_integer_, length(raw)))
+  as.integer(s$sums[match(round(raw, 8), round(s$grid, 8))])
 }
 
 #' @rdname long_table_scale
@@ -109,7 +138,8 @@ export_compact <- function(long, cont, dir, inst = NULL) {
               raw = round(.data$raw, 4), T = round(.data$T, digits),
               T_int_lo = round(.data$T_int_lo, digits), T_int_hi = round(.data$T_int_hi, digits),
               pctl_med = round(.data$pctl_med, 4),
-              extrapolation = as.integer(.data$extrapolation)) %>%
+              extrapolation = as.integer(.data$extrapolation),
+              sum_score = if ("sum_score" %in% names(long)) .data$sum_score else NA_integer_) %>%
     arrange(.data$version, .data$level, .data$scale, across(all_of(cv)), .data$raw)
   for (v in unique(band$version))
     write_csv(rename_norm(filter(band, .data$version == v), "T", nn),
@@ -129,7 +159,8 @@ export_compact <- function(long, cont, dir, inst = NULL) {
                 raw = round(.data$raw, 4), T = round(.data$T, digits),
                 pctl_med = round(.data$pctl_med, 4),
                 extrapolation = as.integer(.data$pctl_med < .005 | .data$pctl_med > .995),
-                .data$half_width) %>%
+                .data$half_width,
+                sum_score = if ("sum_score" %in% names(cont)) .data$sum_score else NA_integer_) %>%
       arrange(.data$version, .data$level, .data$scale, across(all_of(c(by, xv))), .data$raw)
     for (v in unique(cc$version))
       saveRDS(as.data.frame(rename_norm(filter(cc, .data$version == v), "T", nn)),
@@ -227,8 +258,9 @@ export_json <- function(long, inst, file, citation = "", title = NULL,
   })
   out <- stats::setNames(
     list(inst$id, format(Sys.time(), "%Y-%m-%d"),
-         c(map_chr(cv, \(cn) wv(src_name(cn))), w("overall")), unname(sources)),
-    c("instrument", w("created"), w("grouping"), w("sources")))
+         c(map_chr(cv, \(cn) wv(src_name(cn))), w("overall")), unname(sources),
+         as.character(utils::packageVersion("normpipe")), FORMAT_VERSION),
+    c("instrument", w("created"), w("grouping"), w("sources"), "normpipe_version", "format_version"))
   jsonlite::write_json(out, file, auto_unbox = TRUE, pretty = TRUE, digits = NA, na = "null")
   invisible(file)
 }

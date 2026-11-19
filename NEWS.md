@@ -1,3 +1,93 @@
+# normpipe 1.0.0
+
+From this version on, the package changes only by addition: configuration
+keys and their defaults, stage names, output files, their columns and the
+keys of the JSON file are kept, and a correction that changes results is
+listed under "Changes to results". The README (section "Stability") and the
+help pages (section "Lifecycle") say what this covers. An output folder of
+0.4.1 is taken over: only the random steps listed below are recomputed.
+
+## Changes to results
+
+* **Intervals of bifactor and composite scales, and integrated intervals of
+  all scales, are reproducible.** The Monte Carlo steps of the intervals
+  (the posterior of the true score of a scale with several blocks, the
+  item-parameter draws) used the random-number state of the session, so
+  that two runs, or a run with some results from the cache, gave slightly
+  different limits. Every random step now has a seed of its own (see
+  below). The score-conditional intervals of bifactor and composite scales
+  and the integrated intervals of all scales change once, within their
+  Monte Carlo error, and are recomputed on the next run. Norm values, norm
+  bands, `n_eff` and the score-conditional intervals of graded response
+  scales are unchanged and are not recomputed.
+
+## Reproducibility
+
+* Every random step (bootstrap draws, imputation, projection and fit of a
+  transfer model, item-parameter draws, Monte Carlo of the intervals) runs
+  with a seed derived from the names of the step and the scale and restores
+  the random-number state of the caller. Steps that already had a fixed
+  seed keep it. `run_norming()`, `direct_frame()`, `frequency_frame()`,
+  `impute_items()` and `simulate_reference()` no longer change the
+  random-number state of the session.
+* Transfer models are fitted with a fixed seed. Transfer models in the
+  cache stay valid.
+* New key `uncertainty: seed`: derives other seeds for all random steps.
+* New key `uncertainty: n_mc` (default 1500, the number used so far):
+  Monte Carlo draws per summed score for bifactor and composite scales.
+* `draw_model_params()` has a new argument `seed`.
+
+## Checks
+
+* The item data of a sample must belong to the rows of `meta`: different
+  numbers of rows are an error, `meta$id` must be unique (reference and
+  calibration samples), and an `id` column in `items` matches the rows by
+  id. So far a missing or reordered row went through and gave respondents
+  the answers of others.
+* An unknown configuration key is an error instead of a warning, with the
+  closest known key in the message; `options(normpipe.unknown_keys =
+  "warn")` restores the warning. The keys of `items`, `items$overrides`,
+  `versions`, `measurement` and of the transfer bridge blocks are now
+  checked as well, and the `transfer` block is checked when the file is
+  read. Further keys of a scale stay allowed (they are kept in `extra`); a
+  near miss of a known scale key gives a warning.
+* New top-level keys `notes` (free text) and `requires` (the version of
+  normpipe a file needs, e.g. `"1.1"`).
+
+## Cache
+
+* The keys of cached results contain only what a result depends on. A
+  changed label or level recomputes nothing, a changed kernel only the
+  continuous norms, and a new scale only its own results (and the scoring
+  of the reference sample). Results computed by 0.4.1 are recognised by
+  their earlier keys and taken over.
+* A cached item model is used only if it was fitted with the engine that
+  would fit it now: under `engine: auto`, installing mirt refits the models
+  of the built-in estimator.
+* `cache_get()` has new arguments `legacy_key` and `accept`.
+
+## Output
+
+* `run_info.json` in the output folder records what the tables were
+  computed with: package and format version, commit (when installed from
+  GitHub), R and package versions, checksum of the configuration file and
+  hash of the configuration as read, engine, seed rule, the settings of
+  `uncertainty`, the raking, the size of the reference sample, the routes.
+* The JSON export has the keys `normpipe_version` and `format_version`.
+* New column `sum_score` at the end of `norm_tables.csv`,
+  `norm_tables_continuous.csv` and the compact tables: the raw score as the
+  whole-number sum of the item values (in units of `items$unit`), empty for
+  scales tabulated on a reporting grid.
+* `citation("normpipe")` and `CITATION.cff` give the reference of a version.
+
+## Tests
+
+* A reference test norms the demo instrument with fixed settings and
+  compares the result with stored tables; further tests check that no
+  exported function, default or column disappears, that results do not
+  depend on the random-number state or on the cache, and that unknown keys
+  and misaligned samples are caught.
+
 # normpipe 0.4.1
 
 Three corrections to what a draw frame contributes to the intervals and to

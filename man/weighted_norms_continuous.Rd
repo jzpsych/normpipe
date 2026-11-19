@@ -51,3 +51,11 @@ categorical group variables, e.g. per gender), or pooled when there is
 none. Pseudo-observations of the prior carry their own values of the
 variable, so they enter the kernel like everybody else.
 }
+\section{Lifecycle}{
+
+Stable since normpipe 1.0.0: the name, the arguments and the documented
+parts of the result are kept; later versions only add to them. The
+argument `ages` is the name of `values` in normpipe < 0.4 and is kept as
+an alias.
+}
+

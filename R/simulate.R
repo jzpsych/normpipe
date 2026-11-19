@@ -14,7 +14,8 @@
 #'
 #' @param inst Instrument ([read_instrument()]).
 #' @param N Number of respondents.
-#' @param seed Random seed.
+#' @param seed Random seed. The random-number state of the caller is
+#'   restored afterwards.
 #' @param general Loading of every trait on the shared general factor.
 #' @param age_effect Linear age effect on the traits (per year, centred at 50).
 #' @param gender_effect Shift of every second trait for `gender == "f"`.
@@ -28,10 +29,13 @@
 #'                                     package = "normpipe"))
 #' sim <- simulate_reference(inst, N = 200)
 #' str(sim$meta)
+#' @section Lifecycle:
+#' Stable since normpipe 1.0.0: the name, the arguments and the documented
+#' parts of the result are kept; later versions only add to them.
 #' @export
 simulate_reference <- function(inst, N = 2000, seed = 1, general = 0.6,
                                age_effect = 0.01, gender_effect = 0.3) {
-  set.seed(seed)
+  local_seed(seed)
   it <- inst$items
   n_items <- nrow(it)
   # assign every item to one trait: the first facet-level scale of the first

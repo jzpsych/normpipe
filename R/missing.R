@@ -41,7 +41,8 @@
 #' @param dat Data frame with item columns (raw response codes).
 #' @param inst Instrument ([read_instrument()]).
 #' @param M Number of completed data sets.
-#' @param seed Random seed.
+#' @param seed Random seed. The random-number state of the caller is
+#'   restored afterwards.
 #' @param covariates Optional data frame with one row per row of `dat`
 #'   (e.g. age and gender); numeric columns enter the distance scaled to their
 #'   range, other columns as match or mismatch, each with the weight of one
@@ -59,6 +60,9 @@
 #' imp <- impute_items(sim$items, inst, M = 3)
 #' sapply(imp, function(d) d[1:5, 1])
 #' answered_share(sim$items, inst)[1:6]
+#' @section Lifecycle:
+#' Stable since normpipe 1.0.0: the name, the arguments and the documented
+#' parts of the result are kept; later versions only add to them.
 #' @export
 impute_items <- function(dat, inst, M = inst$missing$n_imputations %||% 20, seed = 1,
                          covariates = NULL, k = inst$missing$neighbours %||% 10) {
@@ -78,7 +82,7 @@ impute_items <- function(dat, inst, M = inst$missing$n_imputations %||% 20, seed
   block_of <- imputation_blocks(inst, present)
   blocks <- unique(block_of)
   codes <- as.matrix(as.data.frame(dat)[cols])            # raw codes to copy
-  set.seed(seed)
+  local_seed(seed)
   for (b in blocks) {
     bc <- cols[match(b, present)]
     own <- cols[map_lgl(block_of, \(x) identical(x, b))]   # items imputed within this block

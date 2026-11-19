@@ -147,6 +147,9 @@ apply_par_table <- function(model, tab) {
 #'   `values`, slope matrix `a`, intercept list `d` (mirt parameterisation,
 #'   P(X >= k | theta) = logistic(a'theta + d_k)), `spec`, `blocks`,
 #'   `par_table`, `vcov`, `constrain`, `engine`, `info`, `scale`.
+#' @section Lifecycle:
+#' Stable since normpipe 1.0.0: the name, the arguments and the documented
+#' parts of the result are kept; later versions only add to them.
 #' @export
 fit_scale_model <- function(idx, s, inst, engine = inst$measurement$engine %||% "auto",
                             ncycles = 2000, constrain_blocks = NULL) {
@@ -163,7 +166,7 @@ fit_scale_model <- function(idx, s, inst, engine = inst$measurement$engine %||% 
            collapse = ","), " do not occur in the calibration data. Collapse ",
            "them in the item configuration (categories/values) before fitting.")
   }
-  if (engine == "auto") engine <- if (requireNamespace("mirt", quietly = TRUE)) "mirt" else "internal"
+  engine <- resolved_engine(inst, engine)
   spec <- if (s$model == "bifactor") rep(seq_along(s$components), lengths(s$components))
   # the item models run on VALUE-ORDERED categories: model category c of item
   # j is data index ord[[j]][c] - 1, and the model's values are increasing, so
@@ -184,6 +187,18 @@ fit_scale_model <- function(idx, s, inst, engine = inst$measurement$engine %||% 
   m$scale <- paste0(s$version, "_", s$id)
   m
 }
+
+#' Engine that fits an item model: `auto` is mirt when it is installed,
+#' otherwise the internal estimator
+#' @noRd
+resolved_engine <- function(inst, engine = inst$measurement$engine %||% "auto") {
+  if (identical(engine, "auto")) if (requireNamespace("mirt", quietly = TRUE)) "mirt" else "internal" else engine
+}
+
+#' Monte Carlo draws per summed score for the intervals of scales with
+#' several blocks (`uncertainty$n_mc`)
+#' @noRd
+mc_draws <- function(inst) as.integer(inst$uncertainty$n_mc %||% 1500L)
 
 fit_with_mirt <- function(dat, K, values, spec, ncycles, constrain_blocks = FALSE) {
   if (!requireNamespace("mirt", quietly = TRUE)) stop("mirt is not installed.")
@@ -394,9 +409,15 @@ fit_grm_internal <- function(dat, K, values, spec = NULL, gh_points = NULL,
 #' @param n_draws Number of parameter draws.
 #' @param max_tries Maximum number of redraws per draw before the point
 #'   estimates are used.
+#' @param seed Optional random seed; the random-number state of the caller is
+#'   restored afterwards. Without it the current state is used.
 #' @return List of `n_draws` models of class `normpipe_model`.
+#' @section Lifecycle:
+#' Building block, exported for advanced use: it may change in a minor
+#' version, with an entry in NEWS.md. The pipeline functions that use it are
+#' stable.
 #' @export
-draw_model_params <- function(model, n_draws, max_tries = 50) {
+draw_model_params <- function(model, n_draws, max_tries = 50, seed = NULL) {
   tab <- model$par_table; V <- model$vcov
   if (is.null(tab) || is.null(V)) return(rep(list(model), n_draws))
   est_idx <- which(tab$est)
@@ -440,7 +461,7 @@ draw_model_params <- function(model, n_draws, max_tries = 50) {
     }
     stop("draw_model_params: no valid draw within ", max_tries, " tries.")
   }
-  map(seq_len(n_draws), \(k) apply_par_table(model, draw_valid()))
+  with_seed(seed, map(seq_len(n_draws), \(k) apply_par_table(model, draw_valid())))
 }
 
 # --- Blocks: the common structure of all EAP computations ---------------------
@@ -484,6 +505,10 @@ block_weights <- function(s, n_per_block) {
 #'   of the long form; `NULL` = all items.
 #' @param lambda For `composite`: second-order loadings of the components.
 #' @return List of blocks (`model`, `pos`, `theta_fun`, `bw`).
+#' @section Lifecycle:
+#' Building block, exported for advanced use: it may change in a minor
+#' version, with an entry in NEWS.md. The pipeline functions that use it are
+#' stable.
 #' @export
 make_blocks <- function(s, models, subset = NULL, lambda = NULL) {
   if (s$model == "composite") {

@@ -22,8 +22,11 @@ mean and standard deviation). The package reports two kinds of uncertainty:
 
 ```r
 # install.packages("remotes")
-remotes::install_github("jzpsych/normpipe")
+remotes::install_github("jzpsych/normpipe")          # current version
+remotes::install_github("jzpsych/normpipe@v1.0.0")   # a fixed version, e.g. for a paper
 ```
+
+`citation("normpipe")` gives the reference for the installed version.
 
 Optional packages:
 
@@ -46,9 +49,10 @@ res <- run_norming(inst, ref = list(meta = sim$meta, items = sim$items),
                               "intervals", "export"))
 ```
 
-`ref$meta` needs `id`, the variables of the norm groups (here `age` and
-`gender`) and optionally `weight`; `ref$items` holds the item columns named
-`<prefix><item>`. The result tables are written to `out_dir`, per-scale
+`ref$meta` needs `id` (unique), the variables of the norm groups (here `age`
+and `gender`) and optionally `weight`; `ref$items` holds the item columns
+named `<prefix><item>`, in the row order of `ref$meta` or with an `id`
+column by which the rows are matched. The result tables are written to `out_dir`, per-scale
 caches to `out_dir/cache`. Every cached result knows what it was computed
 from: a rerun skips what is unchanged and recomputes what depends on a
 changed setting or data set (`cache_status()`). Single stages can be run
@@ -119,19 +123,47 @@ first when it has not been run yet.
 
 | File | Content |
 |---|---|
-| `norm_tables.csv` | one row per version, scale, reporting cell and raw score: percentile rank with band, standard score with band, score-conditional and integrated interval, extrapolation flag, effective N |
+| `norm_tables.csv` | one row per version, scale, reporting cell and raw score: percentile rank with band, standard score with band, score-conditional and integrated interval, extrapolation flag, effective N, the raw score as a whole-number sum (`sum_score`) |
 | `norm_tables_continuous.csv` | norms along the continuous variable, e.g. per gender and year of age |
-| `compact/norms_<version>.csv` | compact per-version tables (raw score, standard score, integrated interval, percentile rank, extrapolation flag) |
+| `compact/norms_<version>.csv` | compact per-version tables (raw score, standard score, integrated interval, percentile rank, extrapolation flag, summed score) |
 | `json/<instrument>.json` | JSON norm file per instrument (English or German keys, `export$language`) |
 | `reliability.csv` | marginal reliability of every scale with an item model |
 | `scale_registry.csv` | scales with their route |
+| `run_info.json` | what the tables were computed with: package and format version, commit, R and package versions, checksum of the configuration file, engine, seed rule, settings, raking |
 | `cache/` | cached intermediate results per scale and their manifest |
 
 `export$formats` selects the formats. `migrate_output()` moves an output
 folder written by normpipe < 0.4 to this layout without recomputing
 anything.
 
-Example output of the demo instrument is in `inst/examples/`.
+Example output of the demo instrument is in `inst/examples/` (written by
+`scripts/make_examples.R`).
+
+## Stability
+
+From version 1.0.0 on, normpipe changes only by addition:
+
+- **Configuration.** Keys and their defaults are kept; new keys come with a
+  default that reproduces the earlier results. An unknown key is an error
+  (with `options(normpipe.unknown_keys = "warn")` a warning), and
+  `requires: "1.1"` in a configuration file states the version it needs.
+- **Results.** Stage names, files, columns and JSON keys are kept; new ones
+  are added. Read tables by column name, not by position.
+- **Numbers.** The same data, configuration and package versions give the
+  same numbers. Every random step runs with a seed of its own and leaves
+  the random-number state of the session alone; `run_info.json` records
+  what a set of tables was computed with. A correction that changes results
+  is released as a new version and listed in `NEWS.md` under "Changes to
+  results"; the cache then recomputes what it affects and keeps everything
+  else, also across versions.
+- **Functions.** Every help page states in a section "Lifecycle" whether a
+  function is stable, a building block (exported for advanced use, may
+  change in a minor version), experimental (the measurement invariance
+  functions) or superseded (a name of an earlier version, kept as an
+  alias). The folder `cache/` and unexported functions are internal.
+
+Version numbers follow this: 1.x.0 adds features, 1.0.x corrects errors;
+nothing that is stable is removed.
 
 ## Example configurations
 
@@ -147,7 +179,11 @@ Example output of the demo instrument is in `inst/examples/`.
 
 `tests/testthat` holds the unit tests (Lord–Wingersky recursion against brute
 force, frequency versus individual input, prior mass per cell, grids, EAP
-monotonicity, percentile conventions, norm groups and norm scales). `scripts/smoke.R` runs the whole
+monotonicity, percentile conventions, norm groups and norm scales) and a
+reference test: the demo instrument is normed with fixed settings and
+compared with stored tables (`tests/testthat/_ref/`), so that no change
+of results goes unnoticed, together with checks that no exported function,
+default or column disappears. `scripts/smoke.R` runs the whole
 pipeline on simulated data for the demo instrument; `scripts/smoke_transfer.R`
 runs the transfer module on simulated data and compares the projected norms
 with the norms of the known full responses.

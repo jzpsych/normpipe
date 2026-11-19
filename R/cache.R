@@ -32,6 +32,11 @@
 #' @param key Key of the result ([cache_key()]).
 #' @param compute Function without arguments that computes the result.
 #' @param say Function for progress messages (default: none).
+#' @param legacy_key Optional key of the same result under the key format of
+#'   an earlier version of the package. A result recorded under it is taken
+#'   over without recomputation and recorded under `key`.
+#' @param accept Optional function of the cached result that returns `TRUE`
+#'   when it can be used, or a reason (string) why it has to be recomputed.
 #' @return `cache_key()`: a string. `cache_get()`: the result.
 #'   `cache_status()`: a tibble with `name`, `key`, `version`, `time`,
 #'   `adopted` (`"TRUE"` for a result taken over by [migrate_output()] that
@@ -42,27 +47,44 @@
 #' cache_get(out, "demo", k, function() sum(1:3))
 #' cache_get(out, "demo", k, function() stop("not computed again"))
 #' cache_status(out)
+#' @section Lifecycle:
+#' `cache_status()` is stable since normpipe 1.0.0. `cache_key()` and
+#' `cache_get()` are building blocks, exported for advanced use: they may
+#' change in a minor version, with an entry in NEWS.md. The layout of the
+#' folder `cache/` is not part of the stable interface; an earlier layout is
+#' taken over by the package.
 #' @export
 cache_key <- function(...) rlang::hash(list(...))
 
 #' @rdname cache_key
 #' @export
-cache_get <- function(out_dir, name, key, compute, say = NULL) {
+cache_get <- function(out_dir, name, key, compute, say = NULL, legacy_key = NULL, accept = NULL) {
   f <- cache_file(out_dir, name)
   man <- read_manifest(out_dir)
   hit <- match(name, man$name)
-  if (file.exists(f) && !is.na(hit) && identical(man$key[hit], key)) return(readRDS(f))
-  if (file.exists(f) && !is.na(hit) && identical(man$adopted[hit], "TRUE")) {
-    # a result taken over by migrate_output(): accepted once, then keyed
-    cache_record(out_dir, name, key)
-    return(readRDS(f))
+  why <- "inputs changed"
+  if (file.exists(f) && !is.na(hit)) {
+    current <- identical(man$key[hit], key)
+    # a result taken over by migrate_output(), or recorded under the key
+    # format of an earlier version: accepted, then recorded under `key`
+    carried <- !current && (identical(man$adopted[hit], "TRUE") ||
+                              (!is.null(legacy_key) && identical(man$key[hit], legacy_key)))
+    if (current || carried) {
+      value <- readRDS(f)
+      ok <- if (is.null(accept)) TRUE else accept(value)
+      if (isTRUE(ok)) {
+        if (carried) cache_record(out_dir, name, key)
+        return(value)
+      }
+      why <- if (is.character(ok)) ok else "the cached result does not fit the current settings"
+    }
   }
   if (file.exists(f)) {
     old <- file.path(cache_dir(out_dir), "superseded")
     dir.create(old, showWarnings = FALSE, recursive = TRUE)
     to <- file.path(old, paste0(name, "_", format(Sys.time(), "%Y%m%d_%H%M%S"), ".rds"))
     file.rename(f, to)
-    if (!is.null(say)) say(name, ": inputs changed, recomputing (previous result moved to superseded/)")
+    if (!is.null(say)) say(name, ": ", why, ", recomputing (previous result moved to superseded/)")
   }
   value <- compute()
   dir.create(cache_dir(out_dir), showWarnings = FALSE, recursive = TRUE)
@@ -178,6 +200,9 @@ migrate_cache_name <- function(n) {
 #'   returned.
 #' @return Tibble with `from` and `to` (paths relative to `out_dir`),
 #'   invisibly unless `dry_run`.
+#' @section Lifecycle:
+#' Stable since normpipe 1.0.0: the name, the arguments and the documented
+#' parts of the result are kept; later versions only add to them.
 #' @export
 migrate_output <- function(out_dir, dry_run = FALSE) {
   stopifnot(dir.exists(out_dir))

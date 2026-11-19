@@ -23,7 +23,8 @@ answered_share(dat, inst)
 
 \item{M}{Number of completed data sets.}
 
-\item{seed}{Random seed.}
+\item{seed}{Random seed. The random-number state of the caller is
+restored afterwards.}
 
 \item{covariates}{Optional data frame with one row per row of `dat`
 (e.g. age and gender); numeric columns enter the distance scaled to their
@@ -65,6 +66,12 @@ and one who answered nothing receives draws from the marginal distribution.
 `answered_share()` gives the share of the presented items each respondent
 answered.
 }
+\section{Lifecycle}{
+
+Stable since normpipe 1.0.0: the name, the arguments and the documented
+parts of the result are kept; later versions only add to them.
+}
+
 \examples{
 inst <- read_instrument(system.file("instruments/demo7/demo7.yml",
                                     package = "normpipe"))

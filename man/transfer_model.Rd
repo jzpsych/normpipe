@@ -62,3 +62,10 @@ the transfer specification of the outcome.
 The fit records the observed items in `fit$normpipe`, which
 [project_outcome()] needs.
 }
+\section{Lifecycle}{
+
+`fit_transfer()` is stable since normpipe 1.0.0. `transfer_model()` is a
+building block, exported for advanced use: it may change in a minor
+version, with an entry in NEWS.md.
+}
+

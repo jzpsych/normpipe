@@ -21,6 +21,12 @@ least `srmr`, relative to the model in `compared_with`.}
 \description{
 Changes in fit between nested invariance models and the Chen (2007) rule
 }
+\section{Lifecycle}{
+
+Experimental: the decision rules, arguments and results may change in a
+minor version, with an entry in NEWS.md.
+}
+
 \references{
 Chen, F. F. (2007). Sensitivity of goodness of fit indexes to
   lack of measurement invariance. *Structural Equation Modeling, 14*(3),

@@ -50,7 +50,9 @@ All keys of the configuration file are documented in
 The reference sample is a list with two data frames: `meta` (`id`, the
 variables of the norm groups, here `age` and `gender`, and optionally
 `weight`) and `items` (the item columns, named
-`<prefix><item>`, with the raw response codes). Here it is simulated.
+`<prefix><item>`, with the raw response codes). The rows of `items` are the
+respondents of `meta` in the same order; with a column `id` in `items` they
+are matched by id instead. Here the sample is simulated.
 
 ```{r}
 sim <- simulate_reference(inst, N = 1500, seed = 2)

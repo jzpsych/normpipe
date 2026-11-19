@@ -21,3 +21,9 @@ List with `ok` (`TRUE` when scalar invariance of the bridge items
 \description{
 Decision on the invariance analyses
 }
+\section{Lifecycle}{
+
+Experimental: the decision rules, arguments and results may change in a
+minor version, with an entry in NEWS.md.
+}
+

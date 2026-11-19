@@ -18,6 +18,10 @@
 #' @return Tibble of integer category indices (0-based, in the order of the
 #'   configured `categories`), `NA` preserved, columns named as in the item
 #'   table. Codes outside the configured categories are an error.
+#' @section Lifecycle:
+#' Building block, exported for advanced use: it may change in a minor
+#' version, with an entry in NEWS.md. The pipeline functions that use it are
+#' stable.
 #' @export
 item_indices <- function(dat, inst, items = inst$items$item) {
   tab <- inst$items[match(items, inst$items$item), ]
@@ -47,6 +51,10 @@ item_indices <- function(dat, inst, items = inst$items$item) {
 #' @return Tibble of item values in integer units (multiply by
 #'   `attr(inst$items, "unit")` for the configured values), reverse keying
 #'   applied.
+#' @section Lifecycle:
+#' Building block, exported for advanced use: it may change in a minor
+#' version, with an entry in NEWS.md. The pipeline functions that use it are
+#' stable.
 #' @export
 item_values <- function(idx, inst, items = inst$items$item) {
   tab <- inst$items[match(items, inst$items$item), ]
@@ -73,6 +81,9 @@ item_values <- function(idx, inst, items = inst$items$item) {
 #'                                     package = "normpipe"))
 #' sim <- simulate_reference(inst, N = 50)
 #' head(score_scales(sim$items, inst))
+#' @section Lifecycle:
+#' Stable since normpipe 1.0.0: the name, the arguments and the documented
+#' parts of the result are kept; later versions only add to them.
 #' @export
 score_scales <- function(dat, inst, prorate = TRUE, partial = FALSE) {
   present <- if (partial) inst$items$item[inst$items$col %in% names(dat)] else inst$items$item
@@ -116,6 +127,10 @@ score_one_scale <- function(vals, s, inst, prorate = TRUE) {
 #' @param x Numeric vector of raw scores.
 #' @param s Scale specification ([get_scale()]).
 #' @return Numeric vector of grid values (`NA` preserved).
+#' @section Lifecycle:
+#' Building block, exported for advanced use: it may change in a minor
+#' version, with an entry in NEWS.md. The pipeline functions that use it are
+#' stable.
 #' @export
 snap_to_grid <- function(x, s) {
   g <- s$grid

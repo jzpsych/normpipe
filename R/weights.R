@@ -48,6 +48,9 @@
 #'   single years and `gender`) and `Freq` (population counts).
 #' @param inst Instrument ([read_instrument()]).
 #' @return `make_margins()`: data frame with the cell variables and `Freq`.
+#' @section Lifecycle:
+#' Stable since normpipe 1.0.0: the name, the arguments and the documented
+#' parts of the result are kept; later versions only add to them.
 #' @export
 make_margins <- function(pop, inst) {
   vars <- cell_vars(inst)

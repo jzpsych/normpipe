@@ -19,7 +19,12 @@
 # Bump an entry when the computation of that stage changes in a way that
 # makes results of earlier package versions outdated.
 CACHE_SCHEMA <- c(prepare = 1L, calibrate = 1L, frame = 1L, norms = 2L, continuous_norms = 1L,
-                  intervals_conditional = 2L, intervals_integrated = 2L)
+                  intervals_conditional = 3L, intervals_integrated = 3L)
+
+# The schema entries under the key format of normpipe 0.4.1 (legacy keys, see
+# legacy_unc())
+CACHE_SCHEMA_041 <- c(prepare = 1L, calibrate = 1L, frame = 1L, norms = 2L, continuous_norms = 1L,
+                      intervals_conditional = 2L, intervals_integrated = 2L)
 
 STAGES <- c("prepare", "calibrate", "transfer", "norms", "continuous_norms",
             "intervals_conditional", "intervals_integrated", "export")
@@ -97,12 +102,16 @@ resolve_stages <- function(stages) {
 #' @param ref Reference sample: `list(meta, items)`. `meta` has `id`, the
 #'   variables of the norm groups ([group_sources()], e.g. `age` and
 #'   `gender`) and optionally `weight` (unit weights otherwise); `items` holds
-#'   the item columns named `<prefix><item>`, in the same row order as `meta`.
+#'   the item columns named `<prefix><item>`, either in the same row order
+#'   as `meta` or with a column `id` by which its rows are matched to
+#'   `meta$id`. The ids of `meta` must be unique; a sample whose parts do not
+#'   fit together (different numbers of rows, ids that do not match) is an
+#'   error.
 #' @param out_dir Output folder: result tables, and the cache in `cache/`.
 #' @param freq Optional named list of frequency tables, one per outcome (see
 #'   [frequency_frame()]); these outcomes take the frequency route.
 #' @param calib Optional calibration sample `list(meta, items)` for stage
-#'   `calibrate`; default `ref`.
+#'   `calibrate` (`meta` may be left out); default `ref`.
 #' @param margins Optional population margins for raking: a margin data
 #'   frame ([make_margins()]) or a list of margin data frames
 #'   ([rake_to_margins()]). Trimming, re-raking and the handling of
@@ -111,7 +120,9 @@ resolve_stages <- function(stages) {
 #' @param models Optional named list of pre-fitted item models per outcome
 #'   ([fit_scale_model()]); they take precedence over stage `calibrate`.
 #' @param donors Donor samples for the transfer module: `list(meta, items)`
-#'   with a column `meta$sample` naming the sample.
+#'   with a column `meta$sample` naming the sample, the rows of `items` in the
+#'   order of `meta` (or matched by an `id` column when `meta$id` is
+#'   unique).
 #' @param stages Stages to run (see Details); they are run in the order of
 #'   the pipeline. The stage names of normpipe < 0.4 (`P0`, `M1`, `M2`,
 #'   `M3a`, `M3b`, `M3c`, `M3d`, `X1`) are still understood.
@@ -137,6 +148,12 @@ resolve_stages <- function(stages) {
 #' run_stage(ctx, "norms")
 #' cache_status("demo-out")
 #' }
+#' @section Lifecycle:
+#' Stable since normpipe 1.0.0: the name, the arguments, the stages and the
+#' files written are kept; later versions only add to them. Of the context
+#' returned by `norming_context()`, only `ctx$long` is part of the stable
+#' interface. The stage names of normpipe < 0.4 and the argument
+#' `portal_citation` are superseded and kept as aliases.
 #' @export
 run_norming <- function(inst, ref = NULL, out_dir, freq = NULL, calib = NULL,
                         margins = NULL, models = NULL, donors = NULL,
@@ -160,10 +177,15 @@ norming_context <- function(inst, ref = NULL, out_dir, freq = NULL, calib = NULL
     donors <- inst$donors_data                 # donors attached to the instrument
     inst$donors_data <- NULL
   }
+  # the item data must belong to the rows of meta
+  calib_same <- is.null(calib)
+  ref <- align_sample(ref, "ref")
+  calib <- if (calib_same) ref else align_sample(calib, "calib")
+  donors <- align_sample(donors, "donors", unique_ids = FALSE)
   dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
   ctx <- new.env(parent = emptyenv())
   ctx$inst <- inst; ctx$ref <- ref; ctx$out_dir <- out_dir; ctx$freq <- freq
-  ctx$calib <- calib %||% ref; ctx$margins <- margins; ctx$models <- models %||% list()
+  ctx$calib <- calib; ctx$margins <- margins; ctx$models <- models %||% list()
   ctx$donors <- donors; ctx$outcomes <- outcomes; ctx$citation <- portal_citation %||% citation
   ctx$say <- if (verbose) function(...) message(...) else function(...) invisible(NULL)
   ctx$fitted <- ctx$models
@@ -199,11 +221,89 @@ print.normpipe_run <- function(x, ...) {
 # ---- helpers -----------------------------------------------------------------
 
 rds <- function(ctx, name) cache_file(ctx$out_dir, name)
-get_cached <- function(ctx, name, key, compute) cache_get(ctx$out_dir, name, key, compute, say = ctx$say)
+get_cached <- function(ctx, name, key, compute, legacy_key = NULL, accept = NULL)
+  cache_get(ctx$out_dir, name, key, compute, say = ctx$say, legacy_key = legacy_key, accept = accept)
+
+# ---- cache keys ------------------------------------------------------------------
+#
+# A key holds what a result depends on and nothing else: descriptive fields
+# (labels, levels) do not enter it, and each stage takes only the settings
+# it uses. Options that are newer than this key format enter a key only when
+# they differ from their default (late_opts()), so that adding an option
+# does not invalidate existing results.
+#
+# legacy_*() reproduce the keys of normpipe 0.4.1. A result recorded under
+# such a key is taken over without recomputation (cache_get(legacy_key = ))
+# when its computation has not changed since; stages whose results did
+# change (random steps with their own seed) offer no legacy key.
+
+# Options of `uncertainty` newer than the key format, with their defaults
+# (`seed` has none)
+LATE_UNCERTAINTY <- list(n_mc = 1500L)
+
+#' The newer options among `names` that differ from their defaults
+#' @noRd
+late_opts <- function(inst, names) {
+  u <- inst$uncertainty
+  out <- list()
+  for (n in names) {
+    v <- u[[n]]
+    if (is.null(v) || isTRUE(all.equal(v, LATE_UNCERTAINTY[[n]]))) next
+    out[[n]] <- v
+  }
+  out
+}
+
+#' Definition of a scale without its descriptive fields
+#' @noRd
+scale_def <- function(s) s[setdiff(names(s), c("label", "level"))]
 
 #' Key of the definition of a scale (scale entry plus its items)
 #' @noRd
 scale_key <- function(inst, o) {
+  s <- get_scale(inst, o)
+  cache_key(scale_def(s), as.data.frame(inst$items[inst$items$item %in% s$items, ]))
+}
+
+#' Definitions of all scales (for the scoring of the reference sample)
+#' @noRd
+versions_key <- function(inst) map(inst$versions, \(v) map(v$scales, scale_def))
+
+#' The part of the norm groups a stage uses: `frame` (group variables and the
+#' values of the continuous variable, for the prior rows), `norms` (group
+#' variables and the overall table), `all`
+#' @noRd
+groups_part <- function(inst, what = c("frame", "norms", "all")) {
+  g <- inst$groups
+  switch(match.arg(what),
+         frame = list(vars = g$vars, continuous = g$continuous[c("variable", "values")]),
+         norms = list(vars = g$vars, overall = g$overall),
+         all = g)
+}
+
+#' Key of the reference data a draw frame is built from: identifiers, group
+#' variables, weights and the scores of one outcome (direct route), or the
+#' item data (`o = NULL`, projection of a transfer model). Computed once per
+#' context.
+#' @noRd
+ref_data_key <- function(ctx, o = NULL) {
+  nm <- if (is.null(o)) ".items" else o
+  if (!is.null(ctx$data_keys[[nm]])) return(ctx$data_keys[[nm]])
+  rs <- ctx$ref_scores
+  base <- as.data.frame(rs[intersect(c("id", frame_vars(ctx$inst), "weight"), names(rs))])
+  k <- if (is.null(o)) cache_key(base, ctx$ref_imp %||% list(ctx$ref$items)) else
+    cache_key(base, rs[[o]], if (!is.null(ctx$scores_imp)) map(ctx$scores_imp, \(x) x[[o]]))
+  ctx$data_keys[[nm]] <- k
+  k
+}
+
+#' `uncertainty` as normpipe 0.4.1 knew it (for legacy keys)
+#' @noRd
+legacy_unc <- function(inst) inst$uncertainty[setdiff(names(inst$uncertainty), c(names(LATE_UNCERTAINTY), "seed"))]
+
+#' Key of a scale under the key format of normpipe 0.4.1
+#' @noRd
+legacy_scale_key <- function(inst, o) {
   s <- get_scale(inst, o)
   cache_key(s, as.data.frame(inst$items[inst$items$item %in% s$items, ]))
 }
@@ -227,6 +327,7 @@ stage_prepare <- function(ctx) {
   if (!is.null(ctx$outcomes)) reg <- reg[reg$outcome %in% ctx$outcomes, ]
   observed_items <- integer(0)
   ctx$ref_scores <- NULL; ctx$ref_imp <- NULL; ctx$scores_imp <- NULL
+  ctx$key_p0 <- NULL; ctx$key_p0_legacy <- NULL; ctx$data_keys <- list(); ctx$rake_diagnostics <- NULL
   mc <- missing_cfg(inst)
   if (!is.null(ref)) {
     if (mc$method == "impute") {
@@ -241,8 +342,13 @@ stage_prepare <- function(ctx) {
       }
     }
     ctx$key_p0 <- cache_key(CACHE_SCHEMA[["prepare"]], ref$meta, ref$items, ctx$margins, inst$weighting,
-                            mc, inst$groups, inst$versions, as.data.frame(inst$items))
-    p0 <- get_cached(ctx, "prepare_reference", ctx$key_p0, function() {
+                            mc, groups_part(inst, "frame"), versions_key(inst), as.data.frame(inst$items),
+                            late_opts(inst, "seed"))
+    # with a seed of its own, the random steps no longer match earlier results
+    ctx$key_p0_legacy <- if (is.null(inst$uncertainty$seed))
+      cache_key(CACHE_SCHEMA_041[["prepare"]], ref$meta, ref$items, ctx$margins, inst$weighting,
+                mc, inst$groups, inst$versions, as.data.frame(inst$items))
+    p0 <- get_cached(ctx, "prepare_reference", ctx$key_p0, legacy_key = ctx$key_p0_legacy, function() {
       meta <- as_tibble(ref$meta)
       if (!"weight" %in% names(meta)) meta$weight <- 1
       for (v in setdiff(frame_vars(inst), names(meta)))
@@ -264,7 +370,7 @@ stage_prepare <- function(ctx) {
       imp <- NULL; scores_imp <- NULL
       if (mc$method == "impute") {
         cv <- intersect(mc$covariates, names(ref$meta))
-        imp <- impute_items(ref$items, inst, M = mc$n_imputations, seed = sum(utf8ToInt(inst$id)),
+        imp <- impute_items(ref$items, inst, M = mc$n_imputations, seed = step_seed(inst, inst$id, legacy = TRUE),
                             covariates = if (length(cv)) as.data.frame(ref$meta)[cv], k = mc$neighbours)
         n_imp <- attr(imp, "n_imputed")
         if (sum(n_imp) == 0) imp <- NULL else {
@@ -279,6 +385,7 @@ stage_prepare <- function(ctx) {
       list(scores = scores, imputed = imp, scores_imp = scores_imp, rake_diagnostics = dg)
     })
     ctx$ref_scores <- p0$scores; ctx$ref_imp <- p0$imputed; ctx$scores_imp <- p0$scores_imp
+    ctx$rake_diagnostics <- p0$rake_diagnostics
     # plain copies for inspection and for scripts that read them
     saveRDS(p0$scores, file.path(ctx$out_dir, "reference_scores.rds"))
     if (!is.null(p0$rake_diagnostics)) saveRDS(p0$rake_diagnostics, file.path(ctx$out_dir, "rake_diagnostics.rds"))
@@ -308,8 +415,14 @@ stage_calibrate <- function(ctx) {
     if (!is.null(s$extra$calibrate_from)) next           # scored from another scale's model
     cols <- inst$items$col[match(s$items, inst$items$item)]
     if (!all(cols %in% names(calib$items))) { ctx$say("calibrate ", o, ": items not in the calibration data, skipped"); next }
-    key <- cache_key(CACHE_SCHEMA[["calibrate"]], scale_key(inst, o), inst$measurement, as.data.frame(calib$items[cols]))
-    ctx$fitted[[o]] <- get_cached(ctx, paste0("calibrate_model_", o), key, function() {
+    dat <- as.data.frame(calib$items[cols])
+    key <- cache_key(CACHE_SCHEMA[["calibrate"]], scale_key(inst, o), inst$measurement, dat)
+    legacy <- cache_key(CACHE_SCHEMA_041[["calibrate"]], legacy_scale_key(inst, o), inst$measurement, dat)
+    engine <- resolved_engine(inst)
+    same_engine <- function(m) if (is.null(m$engine) || identical(m$engine, engine)) TRUE else
+      paste0("fitted with engine ", m$engine, ", the current engine is ", engine)
+    ctx$fitted[[o]] <- get_cached(ctx, paste0("calibrate_model_", o), key, legacy_key = legacy,
+                                  accept = same_engine, function() {
       if (is.null(idx_all)) idx_all <<- item_indices(calib$items, inst, items = inst$items$item[inst$items$col %in% names(calib$items)])
       idx <- idx_all[cols]
       # full-information likelihood: skipped items are missing, not excluded
@@ -345,9 +458,10 @@ blocks_for <- function(ctx, o, mods) {
     # loadings of the total come from the calibrated component models, also
     # when `mods` holds a parameter draw of them
     point <- models_for(ctx, o)
-    key <- cache_key(CACHE_SCHEMA[["calibrate"]], scale_key(inst, o), point,
-                     as.data.frame(ctx$calib$items[intersect(inst$items$col[match(s$items, inst$items$item)], names(ctx$calib$items))]))
-    lam <- get_cached(ctx, paste0("calibrate_loadings_", o), key, function() {
+    dat <- as.data.frame(ctx$calib$items[intersect(inst$items$col[match(s$items, inst$items$item)], names(ctx$calib$items))])
+    key <- cache_key(CACHE_SCHEMA[["calibrate"]], scale_key(inst, o), point, dat)
+    legacy <- cache_key(CACHE_SCHEMA_041[["calibrate"]], legacy_scale_key(inst, o), point, dat)
+    lam <- get_cached(ctx, paste0("calibrate_loadings_", o), key, legacy_key = legacy, function() {
       idx <- item_indices(ctx$calib$items, inst, items = s$items)
       total_loadings(idx, s, inst, map(point, \(m) m))
     })
@@ -375,12 +489,25 @@ frame_key <- function(ctx, o, suffix = "") {
   inst <- ctx$inst
   route <- if (nzchar(suffix)) "transfer" else ctx$reg$route[ctx$reg$outcome == o]
   src <- switch(route,
-    direct = ctx$key_p0,
+    direct = ref_data_key(ctx, o),
     frequency = cache_key(ctx$freq[[o]]),
-    transfer = cache_key(file_key(ctx, paste0("transfer_", o, suffix)), ctx$key_p0,
+    transfer = cache_key(file_key(ctx, paste0("transfer_", o, suffix)), ref_data_key(ctx),
                          inst$transfer[c("n_draws", "projection_level", "bootstrap_weights", "bridge")]))
-  cache_key(CACHE_SCHEMA[["frame"]], route, src, scale_key(inst, o), inst$groups,
-            inst$uncertainty[c("n_boot", "prior_mass")])
+  cache_key(CACHE_SCHEMA[["frame"]], route, src, scale_key(inst, o), groups_part(inst, "frame"),
+            inst$uncertainty[c("n_boot", "prior_mass")], late_opts(inst, "seed"))
+}
+
+legacy_frame_key <- function(ctx, o, suffix = "") {
+  inst <- ctx$inst
+  if (!is.null(inst$uncertainty$seed)) return(NULL)
+  route <- if (nzchar(suffix)) "transfer" else ctx$reg$route[ctx$reg$outcome == o]
+  src <- switch(route,
+    direct = ctx$key_p0_legacy,
+    frequency = cache_key(ctx$freq[[o]]),
+    transfer = cache_key(file_key(ctx, paste0("transfer_", o, suffix)), ctx$key_p0_legacy,
+                         inst$transfer[c("n_draws", "projection_level", "bootstrap_weights", "bridge")]))
+  cache_key(CACHE_SCHEMA_041[["frame"]], route, src, legacy_scale_key(inst, o), inst$groups,
+            legacy_unc(inst)[c("n_boot", "prior_mass")])
 }
 
 #' Draw frame of a transfer outcome: the cached fit projected into the
@@ -390,10 +517,10 @@ transfer_frame <- function(ctx, o, suffix = "") {
   inst <- ctx$inst; s <- get_scale(inst, o)
   fit <- readRDS(rds(ctx, paste0("transfer_", o, suffix)))
   frames <- prediction_frames(ctx$ref_scores, ctx$ref$meta$id, ctx$ref_imp %||% list(ctx$ref$items), fit, inst)
-  set.seed(sum(utf8ToInt(o)))
-  project_outcome(fit, frames, s, n_draws = inst$transfer$n_draws %||% 500,
-                  level = inst$transfer$projection_level %||% NULL,
-                  bootstrap_weights = inst$transfer$bootstrap_weights %||% TRUE)
+  with_seed(step_seed(inst, o, legacy = TRUE),
+            project_outcome(fit, frames, s, n_draws = inst$transfer$n_draws %||% 500,
+                            level = inst$transfer$projection_level %||% NULL,
+                            bootstrap_weights = inst$transfer$bootstrap_weights %||% TRUE))
 }
 
 draws_for <- function(ctx, o) {
@@ -401,7 +528,7 @@ draws_for <- function(ctx, o) {
   route <- ctx$reg$route[ctx$reg$outcome == o]
   if (route == "transfer" && !file.exists(rds(ctx, paste0("transfer_", o))))
     stop("No transfer model for '", o, "': run stage `transfer` first (needs `donors`).")
-  frame_long(get_cached(ctx, paste0("frame_", o), frame_key(ctx, o), function() {
+  frame_long(get_cached(ctx, paste0("frame_", o), frame_key(ctx, o), legacy_key = legacy_frame_key(ctx, o), function() {
     fr <- switch(route,
       direct = direct_frame(bind_cols(select(ctx$ref_scores, all_of(c("id", frame_vars(inst), "weight"))),
                                       score = ctx$ref_scores[[o]]),
@@ -415,15 +542,24 @@ draws_for <- function(ctx, o) {
 
 # ---- norms per reporting cell, and the cross-check of the projection -------------
 
+# settings of `uncertainty` the norm tables depend on
+NORM_UNC <- c("probs", "pctl_clamp", "pctl_convention")
+
 norms_key <- function(ctx, o, suffix = "")
-  cache_key(CACHE_SCHEMA[["norms"]], frame_key(ctx, o, suffix), ctx$inst$groups, ctx$inst$norm_scale,
-            ctx$inst$uncertainty)
+  cache_key(CACHE_SCHEMA[["norms"]], frame_key(ctx, o, suffix), groups_part(ctx$inst, "norms"),
+            ctx$inst$norm_scale, ctx$inst$uncertainty[NORM_UNC])
+
+legacy_norms_key <- function(ctx, o, suffix = "") {
+  fk <- legacy_frame_key(ctx, o, suffix)
+  if (is.null(fk)) return(NULL)
+  cache_key(CACHE_SCHEMA_041[["norms"]], fk, ctx$inst$groups, ctx$inst$norm_scale, legacy_unc(ctx$inst))
+}
 
 stage_norms <- function(ctx) {
   inst <- ctx$inst
   for (o in ctx$reg$outcome) {
     s <- get_scale(inst, o)
-    get_cached(ctx, paste0("norms_", o), norms_key(ctx, o), function() {
+    get_cached(ctx, paste0("norms_", o), norms_key(ctx, o), legacy_key = legacy_norms_key(ctx, o), function() {
       nm <- norms_all_cells(draws_for(ctx, o), s, inst)
       ctx$say("norms ", o, " done"); nm
     })
@@ -433,7 +569,8 @@ stage_norms <- function(ctx) {
     cc <- map_dfr(cross, \(o) {
       if (!file.exists(rds(ctx, paste0("transfer_", o, "_crosscheck")))) return(NULL)
       s <- get_scale(inst, o)
-      proj <- get_cached(ctx, paste0("norms_crosscheck_", o), norms_key(ctx, o, "_crosscheck"), function() {
+      proj <- get_cached(ctx, paste0("norms_crosscheck_", o), norms_key(ctx, o, "_crosscheck"),
+                         legacy_key = legacy_norms_key(ctx, o, "_crosscheck"), function() {
         nm <- norms_all_cells(transfer_frame(ctx, o, suffix = "_crosscheck"), s, inst)
         ctx$say("crosscheck ", o, ": norms of the projection done"); nm
       })
@@ -452,9 +589,12 @@ stage_continuous_norms <- function(ctx) {
   if (is.null(cont)) return(invisible(ctx))
   for (o in ctx$reg$outcome) {
     s <- get_scale(inst, o)
-    key <- cache_key(CACHE_SCHEMA[["continuous_norms"]], frame_key(ctx, o), inst$groups, inst$norm_scale,
-                     inst$uncertainty)
-    get_cached(ctx, paste0("continuous_norms_", o), key, function() {
+    key <- cache_key(CACHE_SCHEMA[["continuous_norms"]], frame_key(ctx, o), groups_part(inst, "all"),
+                     inst$norm_scale, inst$uncertainty[NORM_UNC])
+    fk <- legacy_frame_key(ctx, o)
+    legacy <- if (!is.null(fk)) cache_key(CACHE_SCHEMA_041[["continuous_norms"]], fk, inst$groups,
+                                          inst$norm_scale, legacy_unc(inst))
+    get_cached(ctx, paste0("continuous_norms_", o), key, legacy_key = legacy, function() {
       fr <- draws_for(ctx, o)
       if (all(is.na(fr[[cont$variable]]))) return(NULL)
       out <- weighted_norms_continuous(fr, s, inst)
@@ -472,11 +612,18 @@ stage_intervals_conditional <- function(ctx) {
     mods <- models_for(ctx, o)
     if (is.null(mods)) { ctx$say("intervals_conditional ", o, ": no item model, skipped"); next }
     s <- get_scale(inst, o)
-    key <- cache_key(CACHE_SCHEMA[["intervals_conditional"]], norms_key(ctx, o), mods, inst$uncertainty)
-    get_cached(ctx, paste0("intervals_conditional_", o), key, function() {
-      nm <- get_cached(ctx, paste0("norms_", o), norms_key(ctx, o),
+    key <- cache_key(CACHE_SCHEMA[["intervals_conditional"]], norms_key(ctx, o), mods,
+                     inst$uncertainty["probs"], late_opts(inst, c("n_mc", "seed")))
+    # graded response scales are computed exactly (no Monte Carlo): their
+    # results of normpipe 0.4.1 stay valid
+    nk <- if (s$model == "grm") legacy_norms_key(ctx, o)
+    legacy <- if (!is.null(nk)) cache_key(CACHE_SCHEMA_041[["intervals_conditional"]], nk, mods, legacy_unc(inst))
+    get_cached(ctx, paste0("intervals_conditional_", o), key, legacy_key = legacy, function() {
+      nm <- get_cached(ctx, paste0("norms_", o), norms_key(ctx, o), legacy_key = legacy_norms_key(ctx, o),
                        function() norms_all_cells(draws_for(ctx, o), s, inst))
-      out <- conditional_tables(blocks_for(ctx, o, mods), s, draws_for(ctx, o), nm, inst)
+      fr <- draws_for(ctx, o); bl <- blocks_for(ctx, o, mods)
+      out <- with_seed(step_seed(inst, paste0("intervals_conditional_", o)),
+                       conditional_tables(bl, s, fr, nm, inst, n_mc = mc_draws(inst)))
       ctx$say("intervals_conditional ", o, " done"); out
     })
   }
@@ -491,16 +638,21 @@ stage_intervals_integrated <- function(ctx) {
     mods <- models_for(ctx, o)
     if (is.null(mods)) next
     s <- get_scale(inst, o)
-    key <- cache_key(CACHE_SCHEMA[["intervals_integrated"]], frame_key(ctx, o), mods, inst$uncertainty,
-                     inst$groups, inst$norm_scale)
+    key <- cache_key(CACHE_SCHEMA[["intervals_integrated"]], frame_key(ctx, o), mods,
+                     inst$uncertainty[c("n_param_draws", NORM_UNC)], groups_part(inst, "norms"),
+                     inst$norm_scale, late_opts(inst, c("n_mc", "seed")))
     get_cached(ctx, paste0("intervals_integrated_", o), key, function() {
       n_param <- inst$uncertainty$n_param_draws
-      draws <- if (s$model == "composite") {
-        comp <- map(mods, \(m) draw_model_params(m, n_param))
-        map(seq_len(n_param), \(r) map(comp, \(d) d[[r]]))
-      } else draw_model_params(mods, n_param)
+      fr <- draws_for(ctx, o)
+      if (s$model == "composite") blocks_for(ctx, o, mods)     # loadings, before the random steps
       t0 <- Sys.time()
-      out <- integrated_intervals(\(m) blocks_for(ctx, o, m), draws, s, draws_for(ctx, o), inst)
+      out <- with_seed(step_seed(inst, paste0("intervals_integrated_", o)), {
+        draws <- if (s$model == "composite") {
+          comp <- map(mods, \(m) draw_model_params(m, n_param))
+          map(seq_len(n_param), \(r) map(comp, \(d) d[[r]]))
+        } else draw_model_params(mods, n_param)
+        integrated_intervals(\(m) blocks_for(ctx, o, m), draws, s, fr, inst, n_mc = mc_draws(inst))
+      })
       ctx$say("intervals_integrated ", o, ": ", round(difftime(Sys.time(), t0, units = "mins"), 1), " min"); out
     })
   }
@@ -525,7 +677,7 @@ stage_export <- function(ctx) {
     x <- rd(paste0("continuous_norms_", o))
     if (is.null(x)) return(NULL)
     s <- get_scale(inst, o)
-    x %>% mutate(version = s$version, scale = s$id, level = s$level)
+    x %>% mutate(version = s$version, scale = s$id, level = s$level, sum_score = sum_score_of(.data$raw, s))
   })
   if ("long" %in% formats) {
     write_csv(long, file.path(out_dir, "norm_tables.csv"), na = "")
@@ -542,6 +694,7 @@ stage_export <- function(ctx) {
     tibble(outcome = o, reliability = marginal_reliability(e$overall))
   })
   if (nrow(rel)) write_csv(rel, file.path(out_dir, "reliability.csv"))
+  write_run_info(ctx)
   ctx$say("Export: ", nrow(long), " rows, ", n_distinct(paste(long$version, long$scale)), " scales")
   ctx$long <- long
   invisible(ctx)

@@ -39,7 +39,8 @@ estimates.}
 
 \item{s}{Scale specification ([get_scale()]).}
 
-\item{fr}{Draw frame; `conditional_tables()` uses its point weights.}
+\item{fr}{Draw frame; `conditional_tables()` pools its draws for the
+prior.}
 
 \item{nm}{Norm tables of the scale ([norms_all_cells()]).}
 
@@ -81,17 +82,25 @@ see [weighted_norms()].}
 \description{
 `conditional_tables()` gives score-conditional intervals for fixed item
 parameters and norm values: per reporting cell the weighted score
-distribution is carried onto the latent metric as the population prior,
-the summed-score EAP gives the posterior of the trait for every summed
-score, and the expected-score curve together with the norm table of the
-cell maps it onto the norm scale (T by default; the columns carry the name
-of the norm scale of the instrument).
+distribution, pooled over the draws of the draw frame, is carried onto the
+latent metric as the population prior, the summed-score EAP gives the
+posterior of the trait for every summed score, and the expected-score
+curve together with the norm table of the cell maps it onto the norm scale
+(T by default; the columns carry the name of the norm scale of the
+instrument).
 }
 \details{
 `integrated_intervals()` repeats this computation under joint draws of the
 item parameters ([draw_model_params()]) and of the norm values (the draws
-of the draw frame), and mixes the per-draw posteriors on a common grid of
-standard scores.
+of the draw frame), and mixes the resulting posteriors on a common grid of
+standard scores. The draws of the frame are divided into as many sets as
+there are parameter draws. Within a set the prior is the score
+distribution pooled over its draws, and the norm table that maps the
+posterior onto the norm scale is computed from every draw in turn, so
+that the mixture has one component per draw of the frame and carries the
+full variability of the norm values. (Up to normpipe 0.4.0 the norm table
+was computed from the pooled draws of a set as well, which averaged most
+of that variability out.)
 The resulting intervals contain both measurement error and the
 uncertainty of the norms.
 

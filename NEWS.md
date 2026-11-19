@@ -1,3 +1,32 @@
+# normpipe 0.4.1
+
+Three corrections to what a draw frame contributes to the intervals and to
+the effective sample size. The norm values and their bands are unchanged.
+The cached results of the stages `norms`, `intervals_conditional` and
+`intervals_integrated` are recomputed on the next run; calibrated models,
+transfer models and draw frames are kept.
+
+* **Integrated intervals carry the full uncertainty of the norm values.**
+  `integrated_intervals()` divides the draws of the draw frame into as many
+  sets as there are item-parameter draws. So far the norm table of a set
+  was computed from its pooled draws (10 of 500 with the defaults), which
+  averaged most of the variability of the norm values out: the integrated
+  intervals contained about a tenth of its variance and were hardly wider
+  than the score-conditional ones. The norm table is now computed from
+  every draw in turn, so that the mixture has one component per draw. The
+  prior of a set is still pooled over its draws. Integrated intervals become
+  wider where the norm band is wide relative to the measurement error, that
+  is, for reliable scales in small reporting cells.
+* **Score-conditional intervals take their prior from all draws.**
+  `conditional_tables()` used the first draw of the frame only, which is one
+  posterior predictive draw with one set of bootstrap weights (transfer
+  route) or one bootstrap draw (direct route). It now pools all draws, the
+  distribution to which the printed norm values refer.
+* **Effective sample size.** `n_eff` in the norm tables (and in the JSON
+  export) was the Kish effective N of the first draw, whose bootstrap
+  weights about halve it. It is now computed from the weights of the
+  respondents averaged over the draws, as in the continuous norms.
+
 # normpipe 0.4.0
 
 The package no longer assumes an instrument normed by gender and age band on

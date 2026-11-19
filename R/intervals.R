@@ -2,15 +2,19 @@
 # intervals.R -- individual intervals on the T metric
 #
 # Score-conditional intervals: per reporting cell the
-# weighted score distribution is carried onto the latent metric as the
-# population prior, the summed-score EAP gives the posterior of the trait per
-# attainable score, and the expected-score curve together with the norm table
-# of the cell maps it onto T.
+# weighted score distribution (all draws of the draw frame pooled) is carried
+# onto the latent metric as the population prior, the summed-score EAP gives
+# the posterior of the trait per attainable score, and the expected-score
+# curve together with the norm table of the cell maps it onto T.
 #
 # Integrated intervals: the same computation repeated under
 # joint draws of item parameters (draw_model_params) and norm-level draws
 # (the draw frame: Bayesian bootstrap of the direct route, or transfer
-# posterior draws), with the per-draw T posteriors mixed on a common T grid.
+# posterior draws). The draws of the frame are divided into as many sets as
+# there are parameter draws; a set gives the prior (its draws pooled), and
+# every single draw of the set gives one norm table. The T posteriors under
+# all norm tables are mixed on a common T grid, so that the mixture has one
+# component per draw of the frame.
 # ==============================================================================
 
 #' Population prior on the latent grid from a weighted score distribution
@@ -85,16 +89,24 @@ norm_table_of_cell <- function(nm, key, inst) {
 #'
 #' `conditional_tables()` gives score-conditional intervals for fixed item
 #' parameters and norm values: per reporting cell the weighted score
-#' distribution is carried onto the latent metric as the population prior,
-#' the summed-score EAP gives the posterior of the trait for every summed
-#' score, and the expected-score curve together with the norm table of the
-#' cell maps it onto the norm scale (T by default; the columns carry the name
-#' of the norm scale of the instrument).
+#' distribution, pooled over the draws of the draw frame, is carried onto the
+#' latent metric as the population prior, the summed-score EAP gives the
+#' posterior of the trait for every summed score, and the expected-score
+#' curve together with the norm table of the cell maps it onto the norm scale
+#' (T by default; the columns carry the name of the norm scale of the
+#' instrument).
 #'
 #' `integrated_intervals()` repeats this computation under joint draws of the
 #' item parameters ([draw_model_params()]) and of the norm values (the draws
-#' of the draw frame), and mixes the per-draw posteriors on a common grid of
-#' standard scores.
+#' of the draw frame), and mixes the resulting posteriors on a common grid of
+#' standard scores. The draws of the frame are divided into as many sets as
+#' there are parameter draws. Within a set the prior is the score
+#' distribution pooled over its draws, and the norm table that maps the
+#' posterior onto the norm scale is computed from every draw in turn, so
+#' that the mixture has one component per draw of the frame and carries the
+#' full variability of the norm values. (Up to normpipe 0.4.0 the norm table
+#' was computed from the pooled draws of a set as well, which averaged most
+#' of that variability out.)
 #' The resulting intervals contain both measurement error and the
 #' uncertainty of the norms.
 #'
@@ -104,7 +116,8 @@ norm_table_of_cell <- function(nm, key, inst) {
 #' @param blocks Block list of the scale ([make_blocks()]) at the point
 #'   estimates.
 #' @param s Scale specification ([get_scale()]).
-#' @param fr Draw frame; `conditional_tables()` uses its point weights.
+#' @param fr Draw frame; `conditional_tables()` pools its draws for the
+#'   prior.
 #' @param nm Norm tables of the scale ([norms_all_cells()]).
 #' @param inst Instrument ([read_instrument()]).
 #' @param sum_scores Summed values (integer units) at which to tabulate;
@@ -121,7 +134,6 @@ norm_table_of_cell <- function(nm, key, inst) {
 #' @export
 conditional_tables <- function(blocks, s, fr, nm, inst, sum_scores = NULL,
                                probs = inst$uncertainty$probs, ...) {
-  fr <- point_frame(fr)
   nm <- norm_internal(nm, inst)
   esc <- expected_score_curve(blocks, s)
   gh <- statmod::gauss.quad.prob(21, "normal")
@@ -165,26 +177,33 @@ integrated_intervals <- function(blocks_fun, model_draws, s, fr, inst,
   theta <- seq(-6, 6, length.out = 241)
   cells <- split_cells(fr, inst)
   acc <- map(cells, \(x) matrix(0, length(T_grid), length(sum_scores)))
+  n_comp <- map(cells, \(x) 0L)
   for (r in seq_len(n_param)) {
     bl <- blocks_fun(model_draws[[r]])
     prep <- map(bl, block_prep, grid = theta, gh = gh)
     esc <- expected_score_curve(bl, s, grid = theta, prep = prep)
     for (key in names(cells)) {
       sub <- cells[[key]] %>% filter(.data$.draw %in% chunks[[r]])
+      # prior: the draws of the set pooled; posterior of the trait per summed score
       pw <- score_dist_to_theta_prior(sub$score, sub$weight, esc, s$step)
-      p <- wecdf_at(sub$score, sub$weight, s$grid, convention)
-      Tmap <- make_Tmap(esc, tibble(raw = s$grid, T = pctl_to_norm(p, clamp, inst$norm_scale)))
       ep <- eapsum_table(bl, s, esc$theta, pw, sum_scores = sum_scores,
                          return_posterior = TRUE, prep = prep, ...)
-      T_theta <- Tmap(ep$theta)
-      for (j in seq_along(sum_scores))
-        acc[[key]][, j] <- acc[[key]][, j] +
-          approx(x = T_theta, y = cumsum(ep$post[, j]), xout = T_grid,
-                 yleft = 0, yright = 1, ties = "ordered")$y
+      cdf <- apply(ep$post, 2, cumsum)
+      # norm table: one per draw of the set, each a component of the mixture
+      for (one in split(sub, sub$.draw)) {
+        p <- wecdf_at(one$score, one$weight, s$grid, convention)
+        Tmap <- make_Tmap(esc, tibble(raw = s$grid, T = pctl_to_norm(p, clamp, inst$norm_scale)))
+        T_theta <- Tmap(ep$theta)
+        for (j in seq_along(sum_scores))
+          acc[[key]][, j] <- acc[[key]][, j] +
+            approx(x = T_theta, y = cdf[, j], xout = T_grid,
+                   yleft = 0, yright = 1, ties = "ordered")$y
+        n_comp[[key]] <- n_comp[[key]] + 1L
+      }
     }
   }
-  out <- map(acc, \(A) map_dfr(seq_along(sum_scores), \(j) {
-    mix <- A[, j] / n_param
+  out <- imap(acc, \(A, key) map_dfr(seq_along(sum_scores), \(j) {
+    mix <- A[, j] / n_comp[[key]]
     tibble(sum_score = sum_scores[j], raw = sum_to_raw(sum_scores[j], s),
            T_eap = sum(head(T_grid, -1) * diff(mix)) + T_grid[1] * mix[1],
            T_lo = T_grid[which.max(mix >= probs[1])],

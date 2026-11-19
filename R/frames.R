@@ -191,10 +191,6 @@ bootstrap_frame <- function(obs, n_boot, seed) {
   })
 }
 
-#' Reduce a draw frame to the point frame (draw 1 with the original weights)
-#' @noRd
-point_frame <- function(fr) filter(fr, .data$.draw == min(.data$.draw))
-
 #' Compact on-disk form of a frame (person rows once + score/weight matrices)
 #' @noRd
 frame_compact <- function(fr) {

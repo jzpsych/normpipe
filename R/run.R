@@ -18,8 +18,8 @@
 
 # Bump an entry when the computation of that stage changes in a way that
 # makes results of earlier package versions outdated.
-CACHE_SCHEMA <- c(prepare = 1L, calibrate = 1L, frame = 1L, norms = 1L, continuous_norms = 1L,
-                  intervals_conditional = 1L, intervals_integrated = 1L)
+CACHE_SCHEMA <- c(prepare = 1L, calibrate = 1L, frame = 1L, norms = 2L, continuous_norms = 1L,
+                  intervals_conditional = 2L, intervals_integrated = 2L)
 
 STAGES <- c("prepare", "calibrate", "transfer", "norms", "continuous_norms",
             "intervals_conditional", "intervals_integrated", "export")

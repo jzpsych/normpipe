@@ -76,7 +76,7 @@ the configuration file.
 | `norms` | draws of the scores and weights of the reference sample per scale (direct route: Bayesian bootstrap; transfer route: projection of the transfer model into the reference sample), from them percentile ranks and standard scores per reporting cell and overall, with norm bands |
 | `continuous_norms` | norms as a smooth function of a continuous variable such as age (Epanechnikov kernel with adaptive half-width) |
 | `intervals_conditional` | score-conditional intervals (summed-score EAP, Lord–Wingersky recursion, population prior of the cell) |
-| `intervals_integrated` | integrated intervals (item-parameter draws × norm-value draws) |
+| `intervals_integrated` | integrated intervals (mixture over item-parameter draws and over the norm table of every norm-value draw) |
 | `export` | long norm table, continuous table, compact per-version tables, JSON norm file, marginal reliabilities |
 
 `intervals` stands for both interval stages. Every stage runs `prepare`
